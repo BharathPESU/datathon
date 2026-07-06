@@ -1,0 +1,203 @@
+{
+  "version": "1.0",
+  "tables": [
+    {
+      "table_name": "State",
+      "columns": [
+        { "column_name": "state_name", "data_type": "TEXT", "max_length": 100, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "District",
+      "columns": [
+        { "column_name": "district_name", "data_type": "TEXT", "max_length": 100, "is_required": true },
+        { "column_name": "state_id",      "data_type": "NUMBER", "is_required": true }
+      ]
+    },
+    {
+      "table_name": "Unit",
+      "columns": [
+        { "column_name": "unit_name",    "data_type": "TEXT",   "max_length": 150, "is_required": true },
+        { "column_name": "unit_type_id", "data_type": "NUMBER", "is_required": false },
+        { "column_name": "district_id",  "data_type": "NUMBER", "is_required": true }
+      ]
+    },
+    {
+      "table_name": "CrimeHead",
+      "columns": [
+        { "column_name": "crime_head_name", "data_type": "TEXT", "max_length": 150, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "CrimeSubHead",
+      "columns": [
+        { "column_name": "crime_sub_head_name", "data_type": "TEXT",   "max_length": 150, "is_required": true },
+        { "column_name": "crime_head_id",        "data_type": "NUMBER", "is_required": true }
+      ]
+    },
+    {
+      "table_name": "CaseCategory",
+      "columns": [
+        { "column_name": "category_name", "data_type": "TEXT", "max_length": 50, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "GravityOffence",
+      "columns": [
+        { "column_name": "gravity_name", "data_type": "TEXT", "max_length": 50, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "CaseStatus",
+      "columns": [
+        { "column_name": "status_name", "data_type": "TEXT", "max_length": 50, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "OccupationMaster",
+      "columns": [
+        { "column_name": "occupation_name", "data_type": "TEXT", "max_length": 100, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "Rank",
+      "columns": [
+        { "column_name": "rank_name", "data_type": "TEXT", "max_length": 50, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "Designation",
+      "columns": [
+        { "column_name": "designation_name", "data_type": "TEXT", "max_length": 100, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "Employee",
+      "columns": [
+        { "column_name": "emp_name",        "data_type": "TEXT",   "max_length": 150, "is_required": true },
+        { "column_name": "rank_id",         "data_type": "NUMBER", "is_required": false },
+        { "column_name": "designation_id",  "data_type": "NUMBER", "is_required": false },
+        { "column_name": "unit_id",         "data_type": "NUMBER", "is_required": false }
+      ]
+    },
+    {
+      "table_name": "Court",
+      "columns": [
+        { "column_name": "court_name",  "data_type": "TEXT",   "max_length": 200, "is_required": true },
+        { "column_name": "district_id", "data_type": "NUMBER", "is_required": true }
+      ]
+    },
+    {
+      "table_name": "Act",
+      "columns": [
+        { "column_name": "act_name", "data_type": "TEXT", "max_length": 200, "is_required": true }
+      ]
+    },
+    {
+      "table_name": "Section",
+      "columns": [
+        { "column_name": "section_name", "data_type": "TEXT",   "max_length": 50,  "is_required": true },
+        { "column_name": "act_id",       "data_type": "NUMBER", "is_required": true }
+      ]
+    },
+    {
+      "table_name": "AppUser",
+      "columns": [
+        { "column_name": "username",         "data_type": "TEXT",    "max_length": 100, "is_required": true },
+        { "column_name": "hashed_password",  "data_type": "TEXT",    "max_length": 255, "is_required": true },
+        { "column_name": "role",             "data_type": "TEXT",    "max_length": 50,  "is_required": true },
+        { "column_name": "employee_id",      "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "is_active",        "data_type": "BOOLEAN", "is_required": false, "default_value": "true" }
+      ]
+    },
+    {
+      "table_name": "CaseMaster",
+      "columns": [
+        { "column_name": "crime_no",              "data_type": "TEXT",    "max_length": 100, "is_required": true },
+        { "column_name": "case_no",               "data_type": "TEXT",    "max_length": 100, "is_required": false },
+        { "column_name": "crime_registered_date", "data_type": "TEXT",    "max_length": 20,  "is_required": true },
+        { "column_name": "incident_from_date",    "data_type": "TEXT",    "max_length": 20,  "is_required": false },
+        { "column_name": "incident_to_date",      "data_type": "TEXT",    "max_length": 20,  "is_required": false },
+        { "column_name": "police_person_id",      "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "police_station_id",     "data_type": "NUMBER",  "is_required": true },
+        { "column_name": "district_id",           "data_type": "NUMBER",  "is_required": true },
+        { "column_name": "case_category_id",      "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "gravity_offence_id",    "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "crime_head_id",         "data_type": "NUMBER",  "is_required": true },
+        { "column_name": "crime_sub_head_id",     "data_type": "NUMBER",  "is_required": true },
+        { "column_name": "case_status_id",        "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "court_id",              "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "latitude",              "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "longitude",             "data_type": "NUMBER",  "is_required": false },
+        { "column_name": "brief_facts",           "data_type": "TEXT",    "max_length": 2000, "is_required": false }
+      ]
+    },
+    {
+      "table_name": "Accused",
+      "columns": [
+        { "column_name": "case_master_id", "data_type": "NUMBER", "is_required": true },
+        { "column_name": "accused_name",   "data_type": "TEXT",   "max_length": 150, "is_required": true },
+        { "column_name": "age_year",       "data_type": "NUMBER", "is_required": false },
+        { "column_name": "gender",         "data_type": "TEXT",   "max_length": 20,  "is_required": false },
+        { "column_name": "person_id",      "data_type": "TEXT",   "max_length": 50,  "is_required": false }
+      ]
+    },
+    {
+      "table_name": "Victim",
+      "columns": [
+        { "column_name": "case_master_id", "data_type": "NUMBER", "is_required": true },
+        { "column_name": "victim_name",    "data_type": "TEXT",   "max_length": 150, "is_required": true },
+        { "column_name": "age_year",       "data_type": "NUMBER", "is_required": false },
+        { "column_name": "gender",         "data_type": "TEXT",   "max_length": 20,  "is_required": false }
+      ]
+    },
+    {
+      "table_name": "ComplainantDetails",
+      "columns": [
+        { "column_name": "case_master_id",    "data_type": "NUMBER", "is_required": true },
+        { "column_name": "complainant_name",  "data_type": "TEXT",   "max_length": 150, "is_required": true },
+        { "column_name": "age_year",          "data_type": "NUMBER", "is_required": false },
+        { "column_name": "gender",            "data_type": "TEXT",   "max_length": 20,  "is_required": false },
+        { "column_name": "occupation_id",     "data_type": "NUMBER", "is_required": false }
+      ]
+    },
+    {
+      "table_name": "ArrestSurrender",
+      "columns": [
+        { "column_name": "case_master_id",         "data_type": "NUMBER", "is_required": true },
+        { "column_name": "type_id",                "data_type": "NUMBER", "is_required": false },
+        { "column_name": "arrest_date",            "data_type": "TEXT",   "max_length": 20,  "is_required": false },
+        { "column_name": "state_id",               "data_type": "NUMBER", "is_required": false },
+        { "column_name": "district_id",            "data_type": "NUMBER", "is_required": false },
+        { "column_name": "police_station_id",      "data_type": "NUMBER", "is_required": false },
+        { "column_name": "io_id",                  "data_type": "NUMBER", "is_required": false },
+        { "column_name": "court_id",               "data_type": "NUMBER", "is_required": false },
+        { "column_name": "accused_master_id",      "data_type": "NUMBER", "is_required": true },
+        { "column_name": "is_accused",             "data_type": "NUMBER", "is_required": false },
+        { "column_name": "is_complainant_accused", "data_type": "NUMBER", "is_required": false }
+      ]
+    },
+    {
+      "table_name": "AuditLog",
+      "columns": [
+        { "column_name": "user_id",       "data_type": "NUMBER", "is_required": true },
+        { "column_name": "username",      "data_type": "TEXT",   "max_length": 100, "is_required": false },
+        { "column_name": "action",        "data_type": "TEXT",   "max_length": 50,  "is_required": true },
+        { "column_name": "resource_type", "data_type": "TEXT",   "max_length": 100, "is_required": false },
+        { "column_name": "resource_ids",  "data_type": "TEXT",   "max_length": 255, "is_required": false },
+        { "column_name": "timestamp",     "data_type": "TEXT",   "max_length": 40,  "is_required": true }
+      ]
+    },
+    {
+      "table_name": "CrimeHotspot",
+      "columns": [
+        { "column_name": "geohash",         "data_type": "TEXT",   "max_length": 20,  "is_required": true },
+        { "column_name": "window_start",    "data_type": "TEXT",   "max_length": 20,  "is_required": false },
+        { "column_name": "window_end",      "data_type": "TEXT",   "max_length": 20,  "is_required": false },
+        { "column_name": "category_id",     "data_type": "NUMBER", "is_required": false },
+        { "column_name": "predicted_count", "data_type": "NUMBER", "is_required": false },
+        { "column_name": "confidence",      "data_type": "NUMBER", "is_required": false }
+      ]
+    }
+  ]
+}
