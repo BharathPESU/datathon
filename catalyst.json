@@ -1,10 +1,8 @@
 {
-  "appsail": {
-    "targets": [
-      "crime_api"
-    ],
-    "crime_api": {
+  "appsail": [
+    {
+      "name": "backend1",
       "source": "backend"
     }
-  }
+  ]
 }

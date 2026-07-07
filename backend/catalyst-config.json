@@ -1,7 +1,0 @@
-{
-  "deployment": {
-    "name": "crime_api",
-    "stack": "python",
-    "type": "advancedio"
-  }
-}

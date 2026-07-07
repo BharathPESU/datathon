@@ -1,4 +1,7 @@
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost"
+  ? "https://backend1-50043690275.development.catalystappsail.in/api/v1"
+  : "http://localhost:8000/api/v1";
+
 
 // ─── Token Refresh Helper ──────────────────────────────────────────────────
 let isRefreshing = false;
