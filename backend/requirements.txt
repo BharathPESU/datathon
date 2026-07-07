@@ -12,3 +12,4 @@ scipy==1.14.1
 scikit-learn==1.5.1
 python-multipart==0.0.9
 zcatalyst-sdk>=1.0.0
+httpx>=0.27.0

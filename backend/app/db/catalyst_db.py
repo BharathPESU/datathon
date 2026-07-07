@@ -1,8 +1,8 @@
 # Catalyst Data Store wrapper — provides ZCQL query interface
-# Since this is a datathon, we use an in-memory mock that mirrors the Catalyst Data Store API
-# This allows local development without requiring Catalyst serve, and can be swapped to real
-# Catalyst SDK calls when deploying.
+# Dynamically routes queries to the live Zoho Catalyst Data Store in the cloud
+# and falls back to in-memory mock for local development.
 
+import os
 import json
 import logging
 import re
@@ -11,7 +11,32 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# In-memory storage — simulates Catalyst Data Store tables
+# Try importing Catalyst SDK
+try:
+    import zcatalyst_sdk
+    HAS_SDK = True
+except ImportError:
+    HAS_SDK = False
+
+# Detect if running in AppSail environment
+IS_CLOUD = os.getenv("CATALYST_ENVIRONMENT") is not None or os.getenv("CATALYST_PROJECT_ID") is not None
+
+_app = None
+
+def get_db_app():
+    global _app
+    if not HAS_SDK or not IS_CLOUD:
+        return None
+    if _app is not None:
+        return _app
+    try:
+        _app = zcatalyst_sdk.initialize()
+        return _app
+    except Exception as e:
+        logger.error(f"Failed to initialize Catalyst SDK in cloud: {e}")
+        return None
+
+# --- In-memory fallback storage ---
 _tables: dict[str, list[dict]] = {}
 _row_counters: dict[str, int] = {}
 
@@ -22,8 +47,33 @@ def _get_table(table_name: str) -> list[dict]:
         _row_counters[table_name] = 0
     return _tables[table_name]
 
+# --- Database API wrappers ---
+
 def insert_row(table_name: str, data: dict) -> dict:
     """Insert a row into a table. Returns the inserted row with ROWID."""
+    app = get_db_app()
+    if app:
+        try:
+            # Safely get all columns to filter out nonexistent ones
+            cols = app.datastore().table(table_name).get_all_columns()
+            live_cols = [c.get("column_name") for c in cols]
+            
+            # Map timestamp to time_stamp if present in live columns
+            mapped_data = {}
+            for k, v in data.items():
+                if k == "timestamp" and "time_stamp" in live_cols and "timestamp" not in live_cols:
+                    mapped_data["time_stamp"] = v
+                else:
+                    mapped_data[k] = v
+                    
+            filtered = {k: v for k, v in mapped_data.items() if k in live_cols}
+            res = app.datastore().table(table_name).insert_row(filtered)
+            return res
+        except Exception as e:
+            logger.error(f"Live Datastore insert failed for {table_name}: {e}")
+            raise e
+
+    # Local in-memory fallback
     table = _get_table(table_name)
     _row_counters[table_name] = _row_counters.get(table_name, 0) + 1
     row = {"ROWID": _row_counters[table_name], **data}
@@ -36,6 +86,19 @@ def insert_rows(table_name: str, rows: list[dict]) -> list[dict]:
 
 def get_row(table_name: str, rowid: int) -> Optional[dict]:
     """Get a single row by ROWID."""
+    app = get_db_app()
+    if app:
+        try:
+            query_str = f"SELECT * FROM {table_name} WHERE ROWID = {rowid}"
+            results = app.zcql().execute_query(query_str)
+            for row in results:
+                if table_name in row and row[table_name].get("ROWID") == rowid:
+                    return row[table_name]
+        except Exception as e:
+            logger.error(f"Live ZCQL get_row failed for {table_name} id {rowid}: {e}")
+        return None
+
+    # Local in-memory fallback
     table = _get_table(table_name)
     for row in table:
         if row["ROWID"] == rowid:
@@ -44,12 +107,49 @@ def get_row(table_name: str, rowid: int) -> Optional[dict]:
 
 def get_all_rows(table_name: str) -> list[dict]:
     """Get all rows from a table."""
+    app = get_db_app()
+    if app:
+        try:
+            # Default query limit in Catalyst is 200, but we can query up to 5000 records
+            query_str = f"SELECT * FROM {table_name} LIMIT 5000"
+            results = app.zcql().execute_query(query_str)
+            return [row[table_name] for row in results if table_name in row]
+        except Exception as e:
+            logger.error(f"Live ZCQL select all failed for {table_name}: {e}")
+            return []
+
+    # Local in-memory fallback
     return _get_table(table_name)
 
 def query_rows(table_name: str, conditions: Optional[dict] = None,
                order_by: Optional[str] = None, limit: int = 100,
                offset: int = 0) -> list[dict]:
     """Query rows with simple conditions (equality matching)."""
+    app = get_db_app()
+    if app:
+        try:
+            query_str = f"SELECT * FROM {table_name}"
+            where_clauses = []
+            if conditions:
+                for k, v in conditions.items():
+                    if isinstance(v, (int, float)):
+                        where_clauses.append(f"{k} = {v}")
+                    else:
+                        where_clauses.append(f"{k} = '{v}'")
+            if where_clauses:
+                query_str += " WHERE " + " AND ".join(where_clauses)
+            if order_by:
+                query_str += f" ORDER BY {order_by}"
+            # ZCQL limits are specified as: LIMIT offset, limit
+            query_str += f" LIMIT {offset}, {limit}"
+            
+            results = app.zcql().execute_query(query_str)
+            return [row[table_name] for row in results if table_name in row]
+        except Exception as e:
+            logger.error(f"Live ZCQL query failed for {table_name}: {e}")
+            return []
+
+    # Local in-memory fallback
     table = _get_table(table_name)
     results = table
 
@@ -60,7 +160,6 @@ def query_rows(table_name: str, conditions: Optional[dict] = None,
         ]
 
     if order_by:
-        # Simple order by (supports ASC/DESC syntax or field names)
         desc = False
         field = order_by
         if " desc" in order_by.lower():
@@ -74,38 +173,32 @@ def query_rows(table_name: str, conditions: Optional[dict] = None,
         except Exception:
             pass
 
-    # Pagination
     return results[offset:offset + limit]
 
 def execute_query(zcql_query: str) -> list[dict]:
-    """
-    Simulates executing ZCQL SELECT queries.
-    Parses basic queries like:
-      SELECT * FROM TableName WHERE col = 'val'
-      SELECT ROWID, col1 FROM TableName ORDER BY col2 DESC
-    """
+    """Executes a ZCQL query on the database."""
+    app = get_db_app()
+    if app:
+        try:
+            return app.zcql().execute_query(zcql_query)
+        except Exception as e:
+            logger.error(f"Live ZCQL execute_query failed: {e}")
+            raise e
+
+    # Local in-memory fallback ZCQL simulation
     logger.info(f"Executing simulated ZCQL: {zcql_query}")
-    
-    # Simple regex to extract table name and where clause
-    # Regex matching: SELECT ... FROM TableName [WHERE ...] [ORDER BY ...] [LIMIT ...]
     match = re.search(r'(?i)from\s+([a-zA-Z0-9_]+)', zcql_query)
     if not match:
         raise ValueError("Invalid ZCQL: FROM clause not found.")
         
     table_name = match.group(1)
     table = _get_table(table_name)
-    
     results = list(table)
     
-    # Parse WHERE clause
     where_match = re.search(r'(?i)where\s+(.+?)(?=\s+order\s+by|\s+limit|$)', zcql_query)
     if where_match:
-        where_clause = where_match.group(1)
-        # Parse simple equality conditions, e.g., col = 'val' or col = 123
         conditions = re.findall(r'([a-zA-Z0-9_]+)\s*=\s*[\'\"]?([^\'\"]+?)[\'\"]?(?=\s+and\s*|\s*$)')
-        # Also parse simple like conditions if any
         for col, val in conditions:
-            # Cast values to float/int if possible
             if val.isdigit():
                 val = int(val)
             else:
@@ -115,7 +208,6 @@ def execute_query(zcql_query: str) -> list[dict]:
                     pass
             results = [row for row in results if str(row.get(col)) == str(val)]
             
-    # Parse ORDER BY
     order_match = re.search(r'(?i)order\s+by\s+([a-zA-Z0-9_\s,]+)(?=\s+limit|$)', zcql_query)
     if order_match:
         order_clause = order_match.group(1).strip()
@@ -126,16 +218,28 @@ def execute_query(zcql_query: str) -> list[dict]:
         except Exception:
             pass
             
-    # Parse LIMIT/OFFSET
     limit_match = re.search(r'(?i)limit\s+(\d+)(?:\s*,\s*(\d+))?', zcql_query)
     if limit_match:
         limit_val = int(limit_match.group(1))
         offset_val = int(limit_match.group(2)) if limit_match.group(2) else 0
         results = results[offset_val:offset_val + limit_val]
         
-    # Return enriched dictionaries matching Catalyst row format
     return [{table_name: row} for row in results]
 
 def get_table_stats() -> dict[str, int]:
     """Returns row counts for all tables."""
+    app = get_db_app()
+    if app:
+        stats = {}
+        for tbl in ["CaseMaster", "Accused", "Victim", "AppUser"]:
+            try:
+                res = app.zcql().execute_query(f"SELECT COUNT(ROWID) FROM {tbl}")
+                if res:
+                    val = list(res[0].values())[0].get("ROWID") or 0
+                    stats[tbl] = int(val)
+            except Exception:
+                stats[tbl] = 0
+        return stats
+
+    # Local in-memory fallback
     return {table_name: len(rows) for table_name, rows in _tables.items()}

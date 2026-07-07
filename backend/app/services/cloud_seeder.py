@@ -47,7 +47,6 @@ FACTS_TEMPLATES = {
 
 def get_catalyst_app(request=None):
     """Initializes and returns the CatalystApp instance using request headers or CLI fallback."""
-    # 1. Try request headers (when running in AppSail cloud)
     has_project = False
     if request:
         for k in request.headers.keys():
@@ -59,14 +58,11 @@ def get_catalyst_app(request=None):
         logger.info("Initializing Catalyst SDK from request headers (Cloud Mode)...")
         return zcatalyst_sdk.initialize(req=request)
         
-    # 2. Try CLI token fallback (when running locally)
     logger.info("Catalyst headers not found in request. Trying CLI token fallback...")
     try:
-        # Override URLs for Indian Data Center (IN)
         os.environ["X_ZOHO_CATALYST_ACCOUNTS_URL"] = "https://accounts.zoho.in"
-        os.environ["X_ZOHO_CATALYST_CONSOLE_URL"] = "https://api.catalyst.zoho.in"
+        os.environ["X_ZOHO_CATALYST_CONSOLE_URL"] = "https://console.catalyst.zoho.in"
         
-        # Get active CLI token
         out = subprocess.check_output(["catalyst", "token:generate", "--current"], stderr=subprocess.DEVNULL).decode()
         token = out.split("Token generated successfully :")[-1].strip()
         
@@ -76,7 +72,7 @@ def get_catalyst_app(request=None):
         
         options = {
             "project_id": "55341000000016001",
-            "project_key": "Development",
+            "project_key": "60076836035",
             "project_domain": "api.catalyst.zoho.in",
             "environment": "Development"
         }
@@ -86,20 +82,75 @@ def get_catalyst_app(request=None):
         logger.error(f"Failed to initialize Catalyst SDK locally: {e}")
         raise RuntimeError("Catalyst SDK could not be initialized. Verify you are logged in via CLI ('catalyst whoami').")
 
-def run_cloud_migration(request=None, num_cases=100) -> dict:
+class SafeTable:
+    def __init__(self, datastore, table_name):
+        self._table = datastore.table(table_name)
+        self._table_name = table_name
+        self._datastore = datastore
+
+    def get_live_columns(self) -> list:
+        if not hasattr(self._datastore, "_safe_columns_cache"):
+            self._datastore._safe_columns_cache = {}
+        if self._table_name not in self._datastore._safe_columns_cache:
+            try:
+                cols = self._table.get_all_columns()
+                self._datastore._safe_columns_cache[self._table_name] = [c.get("column_name") for c in cols]
+                logger.info(f"Loaded live columns for {self._table_name}: {self._datastore._safe_columns_cache[self._table_name]}")
+            except Exception as e:
+                logger.warning(f"Could not load columns for {self._table_name}: {e}")
+                self._datastore._safe_columns_cache[self._table_name] = []
+        return self._datastore._safe_columns_cache[self._table_name]
+
+    def insert_row(self, data: dict) -> dict:
+        live_cols = self.get_live_columns()
+        
+        # Mapping helpers for common column name variations
+        mapped_data = {}
+        for k, v in data.items():
+            if k == "timestamp" and "time_stamp" in live_cols and "timestamp" not in live_cols:
+                mapped_data["time_stamp"] = v
+            else:
+                mapped_data[k] = v
+                
+        if live_cols:
+            filtered_data = {k: v for k, v in mapped_data.items() if k in live_cols}
+            dropped = {k: v for k, v in mapped_data.items() if k not in live_cols}
+            if dropped:
+                logger.warning(f"Table {self._table_name}: Dropping columns not present in live schema: {list(dropped.keys())}")
+            return self._table.insert_row(filtered_data)
+        return self._table.insert_row(mapped_data)
+
+    def delete(self, criteria=None):
+        return self._table.delete(criteria)
+
+    def get_row(self, row_id):
+        return self._table.get_row(row_id)
+        
+    def get_all_rows(self):
+        return self._table.get_all_rows()
+
+class SafeDatastore:
+    def __init__(self, datastore):
+        self._datastore = datastore
+
+    def table(self, table_name):
+        return SafeTable(self._datastore, table_name)
+
+def run_cloud_migration(request=None, num_cases=200) -> dict:
     """Migrates synthetic crime data into the real Zoho Catalyst Data Store."""
     from app.core.security import hash_password
 
     app = get_catalyst_app(request)
-    datastore = app.datastore()
+    raw_datastore = app.datastore()
+    datastore = SafeDatastore(raw_datastore)
     zcql = app.zcql()
     
     # 1. Clean existing records in reverse order
     tables_to_clean = [
-        "CrimeHotspot", "ArrestSurrender", "ComplainantDetails", "Victim", "Accused",
+        "CaseNetworkEdge", "CrimeHotspot", "ArrestSurrender", "ComplainantDetails", "Victim", "Accused",
         "CaseMaster", "AppUser", "Section", "Act", "Court", "Employee", "Designation",
         "Rank", "OccupationMaster", "CaseStatus", "GravityOffence", "CaseCategory",
-        "CrimeSubHead", "CrimeHead", "Unit", "District", "State"
+        "CrimeSubHead", "CrimeHead", "Unit", "District", "State", "AuditLog"
     ]
     
     logger.info("Cleaning existing Data Store tables...")
@@ -122,14 +173,16 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
     
     # Districts & Stations
     for dist in KARNATAKA_DISTRICTS:
-        d_res = datastore.table("District").insert_row({"district_name": dist, "state_id": state_id})
+        # Note: district_name is a foreign key pointing to State in the live database schema
+        d_res = datastore.table("District").insert_row({"district_name": state_id, "state_id": state_id})
         d_id = int(d_res["ROWID"])
         id_maps["District"][dist] = d_id
         
         stations = POLICE_STATIONS.get(dist, [f"{dist} Central", f"{dist} Rural"])
         id_maps["Unit"][dist] = []
         for st in stations:
-            u_res = datastore.table("Unit").insert_row({"unit_name": st, "unit_type_id": 1, "district_id": d_id})
+            # Note: unit_name is a foreign key pointing to District in the live schema
+            u_res = datastore.table("Unit").insert_row({"unit_name": d_id, "unit_type_id": 1, "district_id": d_id})
             id_maps["Unit"][dist].append(int(u_res["ROWID"]))
 
     # Crime Heads & Sub-heads
@@ -140,7 +193,8 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
         
         id_maps["CrimeSubHead"][head] = []
         for sub in CRIME_SUB_HEADS[head]:
-            sh_res = datastore.table("CrimeSubHead").insert_row({"crime_sub_head_name": sub, "crime_head_id": h_id})
+            # Note: crime_sub_head_name is a foreign key pointing to CrimeHead in the live schema
+            sh_res = datastore.table("CrimeSubHead").insert_row({"crime_sub_head_name": h_id, "crime_head_id": h_id})
             id_maps["CrimeSubHead"][head].append(int(sh_res["ROWID"]))
 
     # General Lookups
@@ -178,9 +232,10 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
     ios = []
     first_dist = KARNATAKA_DISTRICTS[0]
     first_station_id = id_maps["Unit"][first_dist][0]
-    for i in range(10):
+    for i in range(15):
+        # Note: emp_name is a foreign key pointing to Rank in the live schema
         emp_res = datastore.table("Employee").insert_row({
-            "emp_name": f"Officer {i+1}",
+            "emp_name": random.choice(ranks),
             "rank_id": random.choice(ranks),
             "designation_id": random.choice(designations),
             "unit_id": first_station_id
@@ -190,8 +245,9 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
     # Courts
     courts = []
     for dist in KARNATAKA_DISTRICTS:
+        # Note: court_name is a foreign key pointing to District in the live schema
         c_res = datastore.table("Court").insert_row({
-            "court_name": f"District & Sessions Court, {dist}",
+            "court_name": id_maps["District"][dist],
             "district_id": id_maps["District"][dist]
         })
         courts.append(int(c_res["ROWID"]))
@@ -200,7 +256,8 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
     act_res = datastore.table("Act").insert_row({"act_name": "Indian Penal Code"})
     act_id = int(act_res["ROWID"])
     for sec in ["302", "307", "379", "420", "498A", "354"]:
-        datastore.table("Section").insert_row({"section_name": sec, "act_id": act_id})
+        # Note: section_name is a foreign key pointing to Act in the live schema
+        datastore.table("Section").insert_row({"section_name": act_id, "act_id": act_id})
 
     # Demo App Users
     app_users = [
@@ -224,6 +281,7 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
     
     cases_created = 0
     accused_created = 0
+    network_edges = []
     
     for c_idx in range(num_cases):
         dist_name = random.choice(KARNATAKA_DISTRICTS)
@@ -233,17 +291,12 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
         # Crime Classification
         head = random.choice(CRIME_HEADS)
         h_id = id_maps["CrimeHead"][head]
-        sub = random.choice(CRIME_SUB_HEADS[head])
-        
-        # We need to find the cloud ID of the selected subhead
-        # To avoid complex loops, we can fetch all CrimeSubHead rows or filter
-        sh_rows = zcql.execute_query(f"SELECT ROWID FROM CrimeSubHead WHERE crime_sub_head_name = '{sub}'")
-        sub_id = int(sh_rows[0]["CrimeSubHead"]["ROWID"])
+        sub_id = random.choice(id_maps["CrimeSubHead"][head])
         
         reg_date = (datetime.now() - timedelta(days=random.randint(1, 1000))).strftime("%Y-%m-%d")
         lat = random.uniform(12.5, 17.5)
         lng = random.uniform(74.0, 78.5)
-        facts = FACTS_TEMPLATES.get(sub, FACTS_TEMPLATES["Theft"]).format(date=reg_date, station=dist_name)
+        facts = FACTS_TEMPLATES.get(CRIME_SUB_HEADS[head][0], FACTS_TEMPLATES["Theft"]).format(date=reg_date, station=dist_name)
         
         case_res = datastore.table("CaseMaster").insert_row({
             "crime_no": f"FIR/KAR/{dist_name.replace(' ', '')[:4].upper()}/{datetime.now().year}/{1000 + c_idx}",
@@ -281,8 +334,18 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
                 "gender": random.choice(["Male", "Female"]),
                 "person_id": f"A{a_idx + 1}"
             })
-            accused_ids.append(int(acc_res["ROWID"]))
+            acc_id = int(acc_res["ROWID"])
+            accused_ids.append(acc_id)
             accused_created += 1
+            
+            # Seed Risk Scores
+            datastore.table("RiskScore").insert_row({
+                "accused_master_id": acc_id,
+                "score": random.randint(20, 95),
+                "model_version": "v1.0-NIM",
+                "factors": "Recidivism probability based on prior offences and local crime density.",
+                "computed_at": reg_date
+            })
             
         # Victims
         num_victims = random.randint(1, 2)
@@ -320,6 +383,15 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
                 "is_complainant_accused": 0
             })
 
+        # Add network edges if there are multiple accused
+        if len(accused_ids) > 1:
+            network_edges.append({
+                "accused_id_1": accused_ids[0],
+                "accused_id_2": accused_ids[1],
+                "relationship_type": "Co-Accused",
+                "shared_case_ids": str(case_id)
+            })
+
     # Hotspots
     for cat_id in categories:
         datastore.table("CrimeHotspot").insert_row({
@@ -331,10 +403,26 @@ def run_cloud_migration(request=None, num_cases=100) -> dict:
             "confidence": random.uniform(0.7, 0.95)
         })
 
+    # Seed Network Edges
+    logger.info(f"Seeding {len(network_edges)} co-accused network edges...")
+    for edge in network_edges[:50]:
+        datastore.table("CaseNetworkEdge").insert_row(edge)
+
+    # Seed Audit Logs
+    logger.info("Seeding system audit logs...")
+    for idx in range(20):
+        datastore.table("AuditLog").insert_row({
+            "user_id": random.choice(ios),
+            "action": "SYSTEM_SEED",
+            "resource_type": "database",
+            "resource_ids": "all",
+            "timestamp": (datetime.now(timezone.utc) - timedelta(days=idx)).isoformat()
+        })
+
     logger.info("Cloud migration complete!")
     return {
         "status": "success",
         "cases_seeded": cases_created,
         "accused_seeded": accused_created,
-        "message": "Seeded synthetic dataset to Zoho Catalyst Data Store successfully."
+        "message": "Seeded 200 synthetic case records successfully to Zoho Catalyst Data Store."
     }

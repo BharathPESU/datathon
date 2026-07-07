@@ -88,11 +88,28 @@ async def seed_cloud_database(request: Request, current_user: dict = Depends(get
         raise HTTPException(status_code=403, detail="Permission denied")
         
     try:
-        # Run cloud migration for 100 cases
-        result = run_cloud_migration(request=request, num_cases=100)
+        # Run cloud migration for 200 cases
+        result = run_cloud_migration(request=request, num_cases=200)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        schema_debug = {}
+        try:
+            from app.services.cloud_seeder import get_catalyst_app
+            app = get_catalyst_app(request)
+            datastore = app.datastore()
+            for tbl in ["State", "District", "Unit", "CrimeHead", "Employee"]:
+                try:
+                    cols = datastore.table(tbl).get_all_columns()
+                    schema_debug[tbl] = [c.get("column_name") for c in cols]
+                except Exception as ex_tbl:
+                    schema_debug[tbl] = f"Error: {ex_tbl}"
+        except Exception as ex_sdk:
+            schema_debug["sdk_error"] = str(ex_sdk)
+            
+        raise HTTPException(
+            status_code=500,
+            detail=f"Migration failed: {e}. Live schemas: {schema_debug}"
+        )
 
 @router.get("/stats")
 async def get_system_stats(current_user: dict = Depends(get_current_user)):

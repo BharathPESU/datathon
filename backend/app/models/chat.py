@@ -15,6 +15,8 @@ class ChatSessionOut(BaseModel):
 
 class ChatMessageIn(BaseModel):
     content: str
+    mode: str = "database"  # "database" | "knowledge_base"
+
 
 class DocRef(BaseModel):
     case_master_id: int

@@ -17,27 +17,56 @@ class NL2SQLService:
             "intent": "general_chat",
             "params": {}
         }
-        
+
         qt = query_text.lower()
+
+        # Domain keyword sets for smarter extraction
+        _crime_types = {"murder","theft","robbery","assault","rape","kidnap","fraud","cyber","arson",
+                        "dacoity","burglary","extortion","cheating","accident","drug","narcotic","abduction"}
+        _district_map = {"bengaluru":"Bengaluru Urban","mysuru":"Mysuru","mangaluru":"Mangaluru",
+                         "hubli":"Hubballi","hubballi":"Hubballi","belagavi":"Belagavi","davangere":"Davangere",
+                         "tumakuru":"Tumakuru","shivamogga":"Shivamogga","kalaburagi":"Kalaburagi"}
+        _stop = {"show","me","find","all","cases","in","with","a","an","the","of","about","for","from","on",
+                 "involving","related","to","and","or","is","are","was","what","which","who","how","any",
+                 "list","get","give","please","latest","recent","last","top"}
+
+        def _extract_keywords(text: str) -> str:
+            """Return space-joined meaningful keywords from a user query."""
+            words = text.lower().split()
+            meaningful = []
+            for w in words:
+                clean = w.strip("?.,'\"!")
+                if clean in _stop or len(clean) < 3:
+                    continue
+                meaningful.append(clean)
+            return " ".join(meaningful)
+
         if "offender" in qt or "repeat" in qt or "recidivism" in qt:
             fallback_response["intent"] = "repeat_offenders"
-            fallback_response["params"] = {"min_cases": 2}
-        elif "trend" in qt or "forecast" in qt or "hotspot" in qt or "density" in qt:
+            min_c = 3 if "3" in qt else (2 if "2" in qt else 2)
+            fallback_response["params"] = {"min_cases": min_c}
+        elif "trend" in qt or "forecast" in qt or "hotspot" in qt or "density" in qt or "latest" in qt:
             fallback_response["intent"] = "trends"
             fallback_response["params"] = {"group_by": "month"}
-        elif "district" in qt or "mysuru" in qt or "bengaluru" in qt:
+        else:
+            # search_cases: extract crime type + district keywords
+            kw_parts = []
+            for crime in _crime_types:
+                if crime in qt:
+                    kw_parts.append(crime)
+            for alias, district in _district_map.items():
+                if alias in qt:
+                    kw_parts.append(alias)
+            if not kw_parts:
+                kw_parts = [_extract_keywords(query_text)]
+            keyword = " ".join(kw_parts).strip() or _extract_keywords(query_text)
             fallback_response["intent"] = "search_cases"
-            fallback_response["params"] = {"keyword": query_text}
-        elif "search" in qt or "find" in qt or "case" in qt or "crime" in qt:
-            fallback_response["intent"] = "search_cases"
-            # Simple keyword extraction
-            words = query_text.split()
-            if len(words) > 1:
-                fallback_response["params"] = {"keyword": words[-1]}
-                
+            fallback_response["params"] = {"keyword": keyword}
+
         if not settings.NVIDIA_API_KEY or settings.NVIDIA_API_KEY == "dummy-key":
             logger.info("Using local keyword fallback for query intent classification")
             return fallback_response
+
 
         # 2. NVIDIA NIM Enhanced Classification
         system_prompt = """

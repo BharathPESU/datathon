@@ -23,6 +23,20 @@ class Settings(BaseSettings):
     # Catalyst
     CATALYST_PROJECT_ID: str = os.environ.get("CATALYST_PROJECT_ID", "55341000000016001")
 
+    # Zoho Catalyst QuickML / AutoML
+    QUICKML_LLM_ENDPOINT: str = os.environ.get(
+        "QUICKML_LLM_ENDPOINT",
+        "https://api.catalyst.zoho.in/quickml/v1/project/55341000000016001/glm/chat"
+    )
+    QUICKML_LLM_MODEL: str = os.environ.get("QUICKML_LLM_MODEL", "crm-dl-gLaM7b_30b_it")
+    QUICKML_RAG_ENDPOINT: str = os.environ.get(
+        "QUICKML_RAG_ENDPOINT",
+        "https://api.catalyst.zoho.in/quickml/v1/project/55341000000016001/rag/answer"
+    )
+    QUICKML_RAG_DOCUMENTS: str = os.environ.get("QUICKML_RAG_DOCUMENTS", "5720000000003006")
+    QUICKML_ORG_ID: str = os.environ.get("QUICKML_ORG_ID", "60076836035")
+    QUICKML_MAX_TOKENS: int = int(os.environ.get("QUICKML_MAX_TOKENS_DNF", "1200"))
+
     class Config:
         env_file = ".env"
         extra = "allow"
