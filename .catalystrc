@@ -1,11 +1,11 @@
 {
   "defaults": {
     "project": 1,
-    "env": 1
+    "env": 2
   },
   "actives": {
     "project": 1,
-    "env": 1
+    "env": 2
   },
   "projects": [
     {
@@ -20,17 +20,15 @@
       "env": [
         {
           "idx": 1,
+          "id": "50043716951",
+          "name": "Production",
+          "type": 1
+        },
+        {
+          "idx": 2,
           "id": "60076836035",
           "name": "Development",
-          "type": 3,
-          "env_status": "Active",
-          "project_details": {
-            "project_name": "datathon",
-            "id": "55341000000016001",
-            "project_type": "Live"
-          },
-          "is_default": true,
-          "action_required": false
+          "type": 3
         }
       ]
     }

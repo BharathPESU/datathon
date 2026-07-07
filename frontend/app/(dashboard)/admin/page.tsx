@@ -18,6 +18,32 @@ export default function AdminPage() {
   const [formError, setFormError] = useState("");
   const [formLoading, setFormLoading] = useState(false);
 
+  // Cloud Seeding State
+  const [migrating, setMigrating] = useState(false);
+  const [migrationSuccess, setMigrationSuccess] = useState(false);
+  const [migrationError, setMigrationError] = useState("");
+
+  const handleMigrateCloud = async () => {
+    if (!confirm("This will clear your remote Catalyst Data Store tables and seed them with a clean Karnataka Police dataset. Proceed?")) {
+      return;
+    }
+    setMigrating(true);
+    setMigrationError("");
+    setMigrationSuccess(false);
+    try {
+      const res = await api.admin.seedCloud();
+      if (res.status === "success") {
+        setMigrationSuccess(true);
+      } else {
+        setMigrationError(res.message || "Data store seeding failed.");
+      }
+    } catch (err: any) {
+      setMigrationError(err.message || "Seeding error. If running locally, make sure you are logged in via Catalyst CLI.");
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   useEffect(() => {
     async function loadAdminData() {
       setLoading(true);
@@ -84,6 +110,42 @@ export default function AdminPage() {
       <div>
         <h2 className="text-xl font-bold gradient-text">Surveillance Administration Control</h2>
         <p className="text-xs text-[var(--foreground-dim)]">Compliance audits, table stats, and identity provisioning controls</p>
+      </div>
+
+      {/* Cloud Migration Action Bar */}
+      <div className="glass-card p-5 border-l-4 border-l-[var(--primary)] flex flex-col gap-4 bg-[var(--surface-dim)]/40">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-white">
+              <Database className="w-4.5 h-4.5 text-[var(--primary)]" />
+              <span>Zoho Catalyst Cloud Data Store Migration</span>
+            </h3>
+            <p className="text-xs text-[var(--foreground-dim)]">
+              Clear and seed the remote Zoho Catalyst Cloud Data Store tables with Karnataka Police dataset.
+            </p>
+          </div>
+          <button
+            onClick={handleMigrateCloud}
+            disabled={migrating}
+            className="btn-primary py-2 px-4 text-xs font-semibold flex items-center gap-2 shrink-0 disabled:opacity-50"
+          >
+            <Database className="w-4 h-4" />
+            <span>{migrating ? "Migrating Data..." : "Load Data to Cloud Store"}</span>
+          </button>
+        </div>
+
+        {migrationSuccess && (
+          <div className="p-3 bg-[var(--success-dim)] text-[var(--success)] rounded-lg flex items-center gap-2 text-xs font-medium">
+            <Check className="w-4 h-4" />
+            <span>Dataset successfully seeded to remote Zoho Catalyst Cloud Data Store (100 Cases / 200+ Accused).</span>
+          </div>
+        )}
+
+        {migrationError && (
+          <div className="p-3 bg-[var(--danger-dim)] text-[var(--danger)] rounded-lg text-xs font-medium">
+            {migrationError}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

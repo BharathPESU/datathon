@@ -173,6 +173,9 @@ const api = {
       body: JSON.stringify(data),
     }),
     stats: () => fetchApi<any>("/admin/stats"),
+    seedCloud: () => fetchApi<any>("/admin/seed-cloud", {
+      method: "POST"
+    }),
   },
 };
 

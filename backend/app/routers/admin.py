@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from app.models.user import AuditLogOut, UserOut, UserCreate
 from app.core.security import get_current_user, hash_password
 from app.core.permissions import can_access
 from app.db import catalyst_db as db
+from app.services.cloud_seeder import run_cloud_migration
 
 router = APIRouter()
 
@@ -79,6 +80,19 @@ async def create_user(req: UserCreate, current_user: dict = Depends(get_current_
         role=user_row["role"],
         employee_id=user_row.get("employee_id")
     )
+
+@router.post("/seed-cloud")
+async def seed_cloud_database(request: Request, current_user: dict = Depends(get_current_user)):
+    """Migrates and seeds the active Zoho Catalyst Cloud Data Store (Admin only)."""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Permission denied")
+        
+    try:
+        # Run cloud migration for 100 cases
+        result = run_cloud_migration(request=request, num_cases=100)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stats")
 async def get_system_stats(current_user: dict = Depends(get_current_user)):
