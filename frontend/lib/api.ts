@@ -163,10 +163,11 @@ const api = {
       method: "POST",
       body: JSON.stringify({ language }),
     }),
-    sendMessage: (session_uuid: string, content: string) => fetchApi<any>(`/chat/session/${session_uuid}/message`, {
-      method: "POST",
-      body: JSON.stringify({ content }),
-    }),
+    sendMessage: (session_uuid: string, content: string, mode: "database" | "knowledge_base" = "database") =>
+      fetchApi<any>(`/chat/session/${session_uuid}/message`, {
+        method: "POST",
+        body: JSON.stringify({ content, mode }),
+      }),
   },
   admin: {
     auditLog: (params?: Record<string, any>) => {

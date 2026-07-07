@@ -4,5 +4,8 @@
       "name": "backend1",
       "source": "backend"
     }
-  ]
+  ],
+  "slate": {
+    "source": "frontend/out"
+  }
 }
