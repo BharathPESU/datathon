@@ -1,6 +1,11 @@
-const API_BASE = typeof window !== "undefined" && window.location.hostname !== "localhost"
-  ? "https://backend1-50043690275.development.catalystappsail.in/api/v1"
-  : "http://localhost:8000/api/v1";
+const getApiBase = () => {
+  if (typeof window !== "undefined") {
+    if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      return "https://backend1-50043690275.development.catalystappsail.in/api/v1";
+    }
+  }
+  return "http://localhost:8000/api/v1";
+};
 
 
 // ─── Token Refresh Helper ──────────────────────────────────────────────────
@@ -21,7 +26,7 @@ async function doTokenRefresh(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
+    const res = await fetch(`${getApiBase()}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
@@ -51,7 +56,7 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = 
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetch(`${getApiBase()}${endpoint}`, {
     ...options,
     headers,
   });
@@ -78,7 +83,7 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = 
         retryHeaders.set("Content-Type", "application/json");
         retryHeaders.set("Authorization", `Bearer ${newToken}`);
 
-        fetch(`${API_BASE}${endpoint}`, { ...options, headers: retryHeaders })
+        fetch(`${getApiBase()}${endpoint}`, { ...options, headers: retryHeaders })
           .then((r) => r.json().then((data) => resolve(data)))
           .catch(reject);
       });

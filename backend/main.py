@@ -39,6 +39,7 @@ app.add_middleware(
         "https://datathon-60076836035.development.catalystserverless.com",
         os.environ.get("FRONTEND_URL", ""),
     ],
+    allow_origin_regex=r"https://.*\.catalystserverless\.(com|in)|http://localhost(:\d+)?|http://127.0.0.1(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
