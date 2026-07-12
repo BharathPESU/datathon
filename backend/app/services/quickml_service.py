@@ -237,7 +237,7 @@ def _mock_rag_response(query: str) -> dict:
     }
 
 
-def _call_quickml_glm(prompt: str, system_prompt: str, request=None, rows: list = None, intent: str = "", sql: str = "") -> str:
+def _call_quickml_glm(prompt: str, system_prompt: str, request=None, rows: list = None, intent: str = "", sql: str = "", model: str = None) -> str:
     """
     Call the Zoho Catalyst QuickML GLM Chat API.
     Falls back to a structured local mock when QUICKML_MOCK=true or no auth token is set.
@@ -248,7 +248,7 @@ def _call_quickml_glm(prompt: str, system_prompt: str, request=None, rows: list 
         return _mock_glm_response(prompt, rows or [], intent=intent, sql=sql)
 
     payload = {
-        "model": settings.QUICKML_LLM_MODEL,
+        "model": model or settings.QUICKML_LLM_MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
@@ -489,61 +489,143 @@ class QuickMLService:
     @staticmethod
     def query_database(user_query: str, request=None) -> dict:
         """
-        Full pipeline: Intent Detection → ZCQL Query → Catalyst Datastore → QuickML GLM.
-        Returns {"content": str, "retrieved_refs": list, "intent": str, "sql": str}
+        Two-Prompt Database Pipeline:
+        1. Prompt 1: User Query + Datastore Schema → Choose Tables and Columns
+        2. Generate & Execute ZCQL based on selected tables and columns.
+        3. Prompt 2: User Query + Chosen Tables/Columns + Retrieved Database Rows → Answer and Summary (using glm-4.7-flash).
         """
-        # 1. Intent + param extraction
-        classification = NL2SQLService.classify_query(user_query)
-        intent = classification.get("intent", "general_chat")
-        params = classification.get("params", {})
-
-        # 2. Build and execute ZCQL
-        zcql = _build_zcql_from_intent(intent, params)
-        logger.info(f"Executing ZCQL: {zcql}")
+        # Load database schema
+        schema_path = "/home/bharath/Desktop/projects/datathon/catalyst_datastore_schema.json"
+        schema_json = "{}"
         try:
-            rows = _execute_zcql(zcql, request, intent=intent, params=params)
+            if os.path.exists(schema_path):
+                with open(schema_path, "r", encoding="utf-8") as f:
+                    schema_data = json.load(f)
+                schema_json = json.dumps(schema_data, indent=2)
         except Exception as e:
-            return {
-                "content": f"Database query failed: {str(e)}",
-                "retrieved_refs": [],
-                "intent": intent,
-                "sql": zcql,
-            }
+            logger.error(f"Failed to read datastore schema: {e}")
 
-        # 3. Build context string from rows for the LLM
+        # ── Prompt 1: Select Tables & Columns ──
+        prompt_1_system = f"""You are a Database Schema Selector AI.
+Analyze the user's natural language question and the datastore schema below. Identify the minimum set of tables and columns needed to fetch the required information to answer the question.
+
+Datastore Schema:
+{schema_json}
+
+You MUST return ONLY a valid JSON object matching this structure:
+{{
+    "tables": ["TableName1", "TableName2"],
+    "columns": ["TableName1.column_name1", "TableName2.column_name2"]
+}}
+Do NOT include markdown, explanations, or code block markers (like ```json). Return raw JSON only."""
+
+        prompt_1_user = f"Question: {user_query}"
+        
+        selected_tables_columns = {"tables": [], "columns": []}
+        intent = "search_cases"
+        try:
+            p1_response = _call_quickml_glm(prompt_1_user, prompt_1_system, request)
+            # Strip markdown fences if present
+            if "```json" in p1_response:
+                p1_response = p1_response.split("```json")[-1].split("```")[0].strip()
+            elif "```" in p1_response:
+                p1_response = p1_response.split("```")[-1].split("```")[0].strip()
+            selected_tables_columns = json.loads(p1_response)
+            logger.info(f"Prompt 1 selected tables & columns: {selected_tables_columns}")
+        except Exception as e:
+            logger.error(f"Prompt 1 (schema selection) failed: {e}")
+
+        # ── Step 2: Generate ZCQL Query based on Selected Tables and Columns ──
+        tables = selected_tables_columns.get("tables", [])
+        columns = selected_tables_columns.get("columns", [])
+        
+        zcql = ""
+        rows = []
+        
+        if tables and columns:
+            prompt_zcql_system = f"""You are a ZCQL (Zoho Catalyst Query Language) generator.
+Generate a valid SELECT query that joins and fetches the selected tables and columns to answer the user's question.
+
+Selected Tables: {json.dumps(tables)}
+Selected Columns: {json.dumps(columns)}
+
+Rules for ZCQL:
+- Select only columns from the list.
+- Use explicit JOINs on primary/foreign keys (e.g., CaseMaster.district_id = District.ROWID).
+- Use proper aliases or fully qualified names.
+- Always include the primary key ROWID of the main tables (e.g., CaseMaster.ROWID, Accused.ROWID).
+- Limit the results to 50 rows (LIMIT 50).
+- Return ONLY the ZCQL statement as a single line. Do not include markdown code block syntax."""
+
+            prompt_zcql_user = f"User Question: {user_query}"
+            try:
+                p_zcql_response = _call_quickml_glm(prompt_zcql_user, prompt_zcql_system, request)
+                if "```sql" in p_zcql_response:
+                    p_zcql_response = p_zcql_response.split("```sql")[-1].split("```")[0].strip()
+                elif "```" in p_zcql_response:
+                    p_zcql_response = p_zcql_response.split("```")[-1].split("```")[0].strip()
+                zcql = p_zcql_response.strip().replace("\n", " ")
+                logger.info(f"Generated ZCQL: {zcql}")
+                
+                # Execute ZCQL
+                rows = _execute_zcql(zcql, request, intent=intent)
+            except Exception as e:
+                logger.error(f"Generated ZCQL execution failed: {e}. Falling back to standard pipeline.")
+                zcql = ""
+
+        # Fallback to standard pipeline if ZCQL was not generated or failed
+        if not zcql or not rows:
+            classification = NL2SQLService.classify_query(user_query)
+            intent = classification.get("intent", "general_chat")
+            params = classification.get("params", {})
+            zcql = _build_zcql_from_intent(intent, params)
+            logger.info(f"Fallback executing ZCQL: {zcql}")
+            try:
+                rows = _execute_zcql(zcql, request, intent=intent, params=params)
+            except Exception as e:
+                return {
+                    "content": f"Database query failed: {str(e)}",
+                    "retrieved_refs": [],
+                    "intent": intent,
+                    "sql": zcql,
+                }
+
+        # ── Prompt 2: Answering and Summarization (using glm-4.7-flash) ──
         context_rows = rows[:15]  # cap at 15 to stay within token budget
-        context_str = json.dumps(context_rows, default=str, indent=2)
+        
+        prompt_2_system = f"""You are an expert crime analytics AI assistant for the Karnataka Police department.
+Answer the user's question factually based ONLY on the retrieved database data below.
 
-        system_prompt = f"""You are an expert crime analytics AI assistant for the Karnataka Police department.
-You have access to LIVE data fetched from the official Zoho Catalyst Crime Database via this ZCQL query:
-  {zcql}
+Selected Tables & Columns:
+{json.dumps(selected_tables_columns, indent=2)}
 
-Retrieved {len(rows)} records (showing first 15):
-{context_str}
+Retrieved Database Rows (with exact Row IDs and Data):
+{json.dumps(context_rows, default=str, indent=2)}
 
 Instructions:
-- Answer the user's question factually based ONLY on this retrieved data.
-- Cite case numbers (crime_no) wherever relevant.
-- If the query involves repeat offenders, identify names and case counts from the data.
-- Provide risk scores if available in the data.
-- Format your response in clean, readable prose with bullet points where helpful.
-- Do not make up data not present in the retrieved rows."""
+1. Provide a detailed answer containing the exact rows, IDs (ROWID), and data values retrieved.
+2. Provide a clear, concise summary of the findings at the end.
+3. Cite case numbers (crime_no) or accused names wherever relevant.
+4. Format your response in clean, readable prose with bullet points where helpful.
+5. Do not make up any data or IDs not present in the retrieved rows.
+"""
 
-        # 4. Call QuickML GLM (passes rows for local mock fallback)
+        prompt_2_user = f"Question: {user_query}"
+        
         try:
-            answer = _call_quickml_glm(user_query, system_prompt, request, rows=context_rows, intent=intent, sql=zcql)
+            answer = _call_quickml_glm(prompt_2_user, prompt_2_system, request, rows=context_rows, intent=intent, sql=zcql, model="glm-4.7-flash")
         except Exception as e:
-            # Fallback: produce a structured response from the raw rows
+            logger.error(f"Prompt 2 failed: {e}. Using fallback generator.")
             if rows:
-                answer = f"Based on the database query ({intent}), I found {len(rows)} records.\n\n"
+                answer = f"Based on the database query, I found {len(rows)} records.\n\n"
                 for row in rows[:5]:
                     crime_no = row.get("crime_no", row.get("ROWID", "?"))
                     brief = str(row.get("brief_facts", row.get("emp_name", "")))[:120]
-                    answer += f"• {crime_no}: {brief}\n"
+                    answer += f"• Row ID {row.get('ROWID')}: {crime_no} - {brief}\n"
             else:
                 answer = "No records were found matching your query in the database."
 
-        # 5. Build citation refs from case rows
+        # Build citation refs from case rows
         refs = []
         for row in context_rows:
             if "crime_no" in row:
