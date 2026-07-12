@@ -643,12 +643,46 @@ Instructions:
         }
 
     @staticmethod
-    def query_knowledge_base(user_query: str, request=None) -> dict:
+    def query_knowledge_base(user_query: str, session_uuid: str = None, request=None) -> dict:
         """
-        Knowledge Base mode: calls the Catalyst QuickML RAG endpoint.
-        Returns {"content": str, "retrieved_refs": list, "intent": "knowledge_base"}
+        Knowledge Base mode:
+        1. Checks for session-specific OCR text in chat_bot_knowledge_base.
+        2. If found, constructs context and queries GLM.
+        3. Else, falls back to the default Catalyst QuickML RAG endpoint.
         """
         try:
+            # 1. Look up session-specific OCR extracted text
+            if session_uuid:
+                from app.services.kb_service import get_kb_rows_by_session
+                ocr_docs = get_kb_rows_by_session(session_uuid)
+                if ocr_docs:
+                    logger.info(f"Session RAG: Found {len(ocr_docs)} documents for session {session_uuid}")
+                    context_parts = []
+                    refs = []
+                    for doc in ocr_docs:
+                        context_parts.append(f"[File: {doc['filename']}]\n{doc['extracted_text']}")
+                        refs.append({
+                            "case_master_id": 0,
+                            "crime_no": doc["filename"],
+                            "snippet": doc["extracted_text"][:200]
+                        })
+                    context_str = "\n\n".join(context_parts)
+                    
+                    system_prompt = (
+                        "You are an expert crime analytics AI assistant for the Karnataka Police department. "
+                        "Answer the user's question based strictly on the retrieved document context below. "
+                        "Cite the source filenames when presenting facts. Keep the tone helpful, professional, and clear."
+                    )
+                    prompt = f"Retrieved Document Context:\n{context_str}\n\nUser Question: {user_query}"
+                    
+                    answer = _call_quickml_glm(prompt, system_prompt, request)
+                    return {
+                        "content": answer,
+                        "retrieved_refs": refs,
+                        "intent": "knowledge_base"
+                    }
+
+            # 2. Default Fallback
             result = _call_quickml_rag(user_query, request)
             sources = result.get("sources", [])
             # Normalise sources into our DocRef shape

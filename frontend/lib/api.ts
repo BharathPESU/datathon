@@ -230,21 +230,23 @@ const api = {
       method: "POST",
       body: JSON.stringify({ language }),
     }),
+    listSessions: () => fetchApi<any[]>("/chat/sessions"),
+    getHistory: (session_uuid: string) => fetchApi<any[]>(`/chat/session/${session_uuid}/messages`),
     sendMessage: (session_uuid: string, content: string, mode: "database" | "knowledge_base" = "database") =>
       fetchApi<any>(`/chat/session/${session_uuid}/message`, {
         method: "POST",
         body: JSON.stringify({ content, mode }),
       }),
-    uploadDocument: (file: File) => {
+    uploadDocument: (session_uuid: string, file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      return fetchApi<any>("/chat/documents", {
+      return fetchApi<any>(`/chat/session/${session_uuid}/documents`, {
         method: "POST",
         body: fd,
       });
     },
-    listDocuments: () => fetchApi<any[]>("/chat/documents"),
-    deleteDocument: (fileId: string) => fetchApi<any>(`/chat/documents/${fileId}`, {
+    listDocuments: (session_uuid: string) => fetchApi<any[]>(`/chat/session/${session_uuid}/documents`),
+    deleteDocument: (session_uuid: string, fileId: string) => fetchApi<any>(`/chat/session/${session_uuid}/documents/${fileId}`, {
       method: "DELETE",
     }),
   },

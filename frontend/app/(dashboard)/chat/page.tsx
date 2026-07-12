@@ -124,11 +124,56 @@ export default function ChatPage() {
     loadMetadata();
   }, []);
 
+  // Load past sessions
+  const [sessions, setSessions] = useState<any[]>([]);
+
+  const loadSessions = async () => {
+    try {
+      const data = await api.chat.listSessions();
+      setSessions(data);
+      return data;
+    } catch (err) {
+      console.error("Failed to load sessions", err);
+      return [];
+    }
+  };
+
+  const loadHistory = async (uuid: string) => {
+    try {
+      const history = await api.chat.getHistory(uuid);
+      const formatted: Message[] = history.map((m: any) => ({
+        id: m.message_uuid || m.ROWID || Date.now().toString(),
+        role: m.role,
+        content: m.content,
+        refs: m.retrieved_refs ? JSON.parse(m.retrieved_refs) : [],
+        mode: m.mode || "database",
+      }));
+      setMessages(formatted);
+    } catch (err) {
+      console.error("Failed to load session history", err);
+    }
+  };
+
+  const handleCreateNewSession = async () => {
+    try {
+      setLoading(true);
+      const res = await api.chat.createSession("en");
+      setSessionUuid(res.session_id);
+      setMessages([]);
+      await loadSessions();
+    } catch (err) {
+      console.error("Failed to create new session", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch RAG documents
   const fetchDocs = async () => {
+    if (!sessionUuid) return;
     setDocsLoading(true);
     try {
-      const data = await api.chat.listDocuments();
+      const data = await api.chat.listDocuments(sessionUuid);
       setUploadedDocs(data);
     } catch (err) {
       console.error("Failed to load documents", err);
@@ -138,18 +183,21 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    if (mode === "knowledge_base") {
-      fetchDocs();
+    if (sessionUuid) {
+      loadHistory(sessionUuid);
+      if (mode === "knowledge_base") {
+        fetchDocs();
+      }
     }
-  }, [mode]);
+  }, [sessionUuid, mode]);
 
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !sessionUuid) return;
 
     setUploading(true);
     try {
-      await api.chat.uploadDocument(file);
+      await api.chat.uploadDocument(sessionUuid, file);
       await fetchDocs();
     } catch (err) {
       console.error("Upload failed", err);
@@ -159,9 +207,9 @@ export default function ChatPage() {
   };
 
   const handleDeleteFile = async (fileId: string) => {
-    if (!confirm("Are you sure you want to delete this document?")) return;
+    if (!confirm("Are you sure you want to delete this document?") || !sessionUuid) return;
     try {
-      await api.chat.deleteDocument(fileId);
+      await api.chat.deleteDocument(sessionUuid, fileId);
       await fetchDocs();
     } catch (err) {
       console.error("Delete failed", err);
@@ -169,15 +217,21 @@ export default function ChatPage() {
   };
 
   useEffect(() => {
-    async function startSession() {
+    async function initChat() {
       try {
-        const res = await api.chat.createSession("en");
-        setSessionUuid(res.session_id);
+        const existing = await loadSessions();
+        if (existing.length > 0) {
+          setSessionUuid(existing[0].session_uuid);
+        } else {
+          const res = await api.chat.createSession("en");
+          setSessionUuid(res.session_id);
+          await loadSessions();
+        }
       } catch (err) {
-        console.error("Failed to start chat session", err);
+        console.error("Failed to initialize chat", err);
       }
     }
-    startSession();
+    initChat();
   }, []);
 
   useEffect(() => {
@@ -434,6 +488,36 @@ export default function ChatPage() {
                   Powered by Zoho Catalyst QuickML AutoML
                 </p>
               </div>
+            </div>
+
+            {/* Session Selector */}
+            <div className="flex items-center gap-2">
+              <select
+                value={sessionUuid || ""}
+                onChange={(e) => {
+                  if (e.target.value === "new") {
+                    handleCreateNewSession();
+                  } else {
+                    setSessionUuid(e.target.value);
+                  }
+                }}
+                className="bg-[var(--surface)] text-[var(--foreground)] border border-[var(--border)] rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer hover:border-[var(--primary)] transition-all font-semibold"
+              >
+                {sessions.map((sess) => (
+                  <option key={sess.session_uuid} value={sess.session_uuid}>
+                    Session: {sess.started_at ? new Date(sess.started_at).toLocaleTimeString() : sess.session_uuid.slice(0, 8)}
+                  </option>
+                ))}
+                <option value="new">+ Start New Session</option>
+              </select>
+              <button
+                onClick={handleCreateNewSession}
+                className="flex items-center gap-1 bg-[var(--primary-glow)]/40 hover:bg-[var(--primary)] hover:text-white text-[var(--primary)] border border-[var(--primary)]/30 rounded-xl px-3 py-1.5 text-xs font-bold transition-all"
+                title="Start a fresh chat session with isolated knowledge base documents"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                New Session
+              </button>
             </div>
 
             {/* Mode Toggle */}
