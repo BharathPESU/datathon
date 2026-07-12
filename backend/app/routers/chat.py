@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File
 from datetime import datetime, timezone
 import uuid
 from app.models.chat import ChatSessionCreate, ChatSessionOut, ChatMessageIn, ChatMessageOut
 from app.services.quickml_service import QuickMLService
+from app.services.filestore_service import FilestoreService
 from app.core.security import get_current_user
 from app.core.permissions import can_access
 from app.db import catalyst_db as db
@@ -110,3 +111,46 @@ async def send_message(
         intent=intent,
         created_at=datetime.now(timezone.utc).isoformat()
     )
+
+
+@router.post("/documents")
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a document to Catalyst File Store / local fallback."""
+    if not can_access(current_user["role"], "chat:use"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file upload")
+
+    res = FilestoreService.upload_document(file.filename, content)
+    return res
+
+
+@router.get("/documents")
+async def list_documents(
+    current_user: dict = Depends(get_current_user)
+):
+    """List all uploaded documents."""
+    if not can_access(current_user["role"], "chat:use"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return FilestoreService.list_documents()
+
+
+@router.delete("/documents/{file_id}")
+async def delete_document(
+    file_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an uploaded document."""
+    if not can_access(current_user["role"], "chat:use"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    success = FilestoreService.delete_document(file_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"status": "success", "message": "File deleted successfully"}

@@ -51,7 +51,9 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   const headers = new Headers(options.headers || {});
-  headers.set("Content-Type", "application/json");
+  if (!(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -80,7 +82,9 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}, retry = 
     return new Promise<T>((resolve, reject) => {
       subscribeToRefresh((newToken) => {
         const retryHeaders = new Headers(options.headers || {});
-        retryHeaders.set("Content-Type", "application/json");
+        if (!(options.body instanceof FormData)) {
+          retryHeaders.set("Content-Type", "application/json");
+        }
         retryHeaders.set("Authorization", `Bearer ${newToken}`);
 
         fetch(`${getApiBase()}${endpoint}`, { ...options, headers: retryHeaders })
@@ -114,8 +118,71 @@ const api = {
       ).toString() : "";
       return fetchApi<any>(`/cases${qs}`);
     },
+    searchAccused: (params?: Record<string, any>) => {
+      const qs = params ? "?" + new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])
+      ).toString() : "";
+      return fetchApi<any[]>(`/cases/accused/search${qs}`);
+    },
     get: (id: number) => fetchApi<any>(`/cases/${id}`),
+    create: (data: any) => fetchApi<any>("/cases", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    update: (id: number, data: any) => fetchApi<any>(`/cases/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+    addAccused: (caseId: number, data: any) => fetchApi<any>(`/cases/${caseId}/accused`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    updateAccused: (caseId: number, id: number, data: any) => fetchApi<any>(`/cases/${caseId}/accused/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+    deleteAccused: (caseId: number, id: number) => fetchApi<any>(`/cases/${caseId}/accused/${id}`, {
+      method: "DELETE",
+    }),
+    addVictim: (caseId: number, data: any) => fetchApi<any>(`/cases/${caseId}/victims`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    updateVictim: (caseId: number, id: number, data: any) => fetchApi<any>(`/cases/${caseId}/victims/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+    deleteVictim: (caseId: number, id: number) => fetchApi<any>(`/cases/${caseId}/victims/${id}`, {
+      method: "DELETE",
+    }),
+    addComplainant: (caseId: number, data: any) => fetchApi<any>(`/cases/${caseId}/complainants`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    updateComplainant: (caseId: number, id: number, data: any) => fetchApi<any>(`/cases/${caseId}/complainants/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+    deleteComplainant: (caseId: number, id: number) => fetchApi<any>(`/cases/${caseId}/complainants/${id}`, {
+      method: "DELETE",
+    }),
+    addArrest: (caseId: number, data: any) => fetchApi<any>(`/cases/${caseId}/arrests`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+    updateArrest: (caseId: number, id: number, data: any) => fetchApi<any>(`/cases/${caseId}/arrests/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+    deleteArrest: (caseId: number, id: number) => fetchApi<any>(`/cases/${caseId}/arrests/${id}`, {
+      method: "DELETE",
+    }),
+    getSimilarSuspects: (id: number) => fetchApi<any>(`/cases/${id}/similar-suspects`),
   },
+  lookups: {
+    getMetadata: () => fetchApi<any>("/lookups/metadata"),
+  },
+
   analytics: {
     trends: (params?: Record<string, any>) => {
       const qs = params ? "?" + new URLSearchParams(
@@ -168,6 +235,18 @@ const api = {
         method: "POST",
         body: JSON.stringify({ content, mode }),
       }),
+    uploadDocument: (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return fetchApi<any>("/chat/documents", {
+        method: "POST",
+        body: fd,
+      });
+    },
+    listDocuments: () => fetchApi<any[]>("/chat/documents"),
+    deleteDocument: (fileId: string) => fetchApi<any>(`/chat/documents/${fileId}`, {
+      method: "DELETE",
+    }),
   },
   admin: {
     auditLog: (params?: Record<string, any>) => {

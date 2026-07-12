@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import routers
-from app.routers import auth, cases, chat, network, analytics, risk, forecast, admin
+from app.routers import auth, cases, chat, network, analytics, risk, forecast, admin, lookups
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytic
 app.include_router(risk.router, prefix="/api/v1/risk", tags=["Risk"])
 app.include_router(forecast.router, prefix="/api/v1/forecast", tags=["Forecast"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(lookups.router, prefix="/api/v1/lookups", tags=["Lookups"])
 
 
 @app.get("/")

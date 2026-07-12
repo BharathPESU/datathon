@@ -31,6 +31,15 @@ def _get_catalyst_token(request=None) -> Optional[str]:
         token = request.headers.get("X-ZCATALYST-TOKEN") or request.headers.get("X-Zcsrf-Token")
         if token:
             return token
+            
+    # Local dev fallback: try fetching live access token from SDK
+    app = db.get_db_app()
+    if app:
+        try:
+            return app.credential.token()
+        except Exception:
+            pass
+            
     return os.environ.get("CATALYST_AUTH_TOKEN", "")
 
 
@@ -82,7 +91,7 @@ def _execute_zcql(query: str, request=None, intent: str = "", params: dict = Non
     if catalyst_app:
         try:
             zcql = catalyst_app.zcql()
-            rows = zcql.executeZCQLQuery(query)
+            rows = zcql.execute_query(query)
             # SDK returns list of {TableName: {...}} dicts — flatten
             result = []
             for row in rows:
@@ -154,10 +163,13 @@ def _execute_zcql(query: str, request=None, intent: str = "", params: dict = Non
 
 def _is_mock_mode() -> bool:
     """Return True when running locally without a real Zoho token."""
-    return (
-        os.environ.get("QUICKML_MOCK", "").lower() in ("1", "true", "yes")
-        or not os.environ.get("CATALYST_AUTH_TOKEN", "")
-    )
+    if os.environ.get("QUICKML_MOCK", "").lower() in ("1", "true", "yes"):
+        return True
+    # If live Catalyst credentials are loaded, we are NOT in mock mode!
+    app = db.get_db_app()
+    if app:
+        return False
+    return not os.environ.get("CATALYST_AUTH_TOKEN", "")
 
 
 def _mock_glm_response(prompt: str, rows: list, intent: str = "", sql: str = "") -> str:
@@ -235,6 +247,35 @@ def _call_quickml_glm(prompt: str, system_prompt: str, request=None, rows: list 
         logger.info("QuickML: running in LOCAL MOCK mode (set CATALYST_AUTH_TOKEN to use live API)")
         return _mock_glm_response(prompt, rows or [], intent=intent, sql=sql)
 
+    payload = {
+        "model": settings.QUICKML_LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": settings.QUICKML_MAX_TOKENS,
+        "temperature": 0.2,
+        "stream": False
+    }
+
+    # Try routing through SDK requester first (natively adds project headers/signing)
+    app = db.get_db_app()
+    if app:
+        try:
+            requester = app.filestore()._requester
+            resp = requester.request(
+                method="POST",
+                path="/glm/chat",
+                json=payload,
+                user="admin",
+                catalyst_service="quickml"
+            )
+            data = resp.response_json
+            if data and "choices" in data:
+                return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"SDK QuickML GLM call failed: {e}. Trying manual HTTP fallback.")
+
     token = _get_catalyst_token(request)
     org_id = settings.QUICKML_ORG_ID
     url = settings.QUICKML_LLM_ENDPOINT
@@ -246,28 +287,101 @@ def _call_quickml_glm(prompt: str, system_prompt: str, request=None, rows: list 
     if token:
         headers["Authorization"] = f"Zoho-oauthtoken {token}"
 
-    payload = {
-        "model": settings.QUICKML_LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": settings.QUICKML_MAX_TOKENS,
-        "temperature": 0.2,
-        "stream": False,
-        "chat_template_kwargs": {"enable_thinking": True},
-    }
-
     try:
         with httpx.Client(timeout=60.0) as client:
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
-            # GLM returns OpenAI-compatible format
             return data["choices"][0]["message"]["content"]
     except Exception as e:
         logger.error(f"QuickML GLM call failed: {e}")
         raise
+
+
+def _get_document_rag_context(query: str) -> tuple[str, list[dict]]:
+    """
+    Scans the uploads directory, reads documents, splits them into chunks,
+    ranks them by keyword overlap, and returns the top chunks as a context string
+    along with a sources list.
+    """
+    from app.services.filestore_service import UPLOAD_DIR
+    import re
+
+    if not os.path.exists(UPLOAD_DIR):
+        return "", []
+
+    query_words = [w.lower() for w in re.findall(r"\w+", query) if len(w) > 2]
+    if not query_words:
+        query_words = [query.lower()]
+
+    chunks = []
+    for filename in os.listdir(UPLOAD_DIR):
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        if not os.path.isfile(file_path):
+            continue
+
+        text = ""
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                text = f.read()[:50000] # read up to 50k chars
+        except Exception as e:
+            logger.warning(f"Could not read file {filename} for RAG: {e}")
+            continue
+
+        if not text.strip():
+            continue
+
+        # Split into paragraphs or chunks of ~500 chars
+        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+        for p in paragraphs:
+            # If paragraph is very long, split by sentences
+            if len(p) > 1000:
+                sentences = re.split(r"(?<=[.!?])\s+", p)
+                current_chunk = ""
+                for s in sentences:
+                    if len(current_chunk) + len(s) < 800:
+                        current_chunk += " " + s
+                    else:
+                        if current_chunk.strip():
+                            chunks.append((filename, current_chunk.strip()))
+                        current_chunk = s
+                if current_chunk.strip():
+                    chunks.append((filename, current_chunk.strip()))
+            else:
+                chunks.append((filename, p))
+
+    if not chunks:
+        return "", []
+
+    # Score chunks based on word overlap
+    scored_chunks = []
+    for filename, chunk in chunks:
+        score = 0
+        chunk_lower = chunk.lower()
+        for word in query_words:
+            score += chunk_lower.count(word)
+        if score > 0:
+            scored_chunks.append((score, filename, chunk))
+
+    # Sort by score descending
+    scored_chunks.sort(key=lambda x: x[0], reverse=True)
+    
+    # If no matches, take the first few chunks of the first document as default context
+    if not scored_chunks:
+        scored_chunks = [(0, filename, chunk) for filename, chunk in chunks[:5]]
+
+    top_chunks = scored_chunks[:5]
+    context_parts = []
+    sources = []
+    seen_sources = set()
+
+    for idx, (score, filename, chunk) in enumerate(top_chunks):
+        context_parts.append(f"[Source: {filename}]\n{chunk}")
+        if filename not in seen_sources:
+            seen_sources.add(filename)
+            sources.append({"title": filename, "content": chunk[:150] + "..."})
+
+    return "\n\n".join(context_parts), sources
 
 
 # ─── Knowledge Base mode: QuickML RAG ───────────────────────────────────────
@@ -277,7 +391,21 @@ def _call_quickml_rag(query: str, request=None) -> dict:
     Call the Zoho Catalyst QuickML RAG endpoint for knowledge base QA.
     Returns {"answer": str, "sources": list}
     """
-    # ── Local mock mode ────────────────────────────────────────────────────
+    # ── Try to retrieve matching context from newly uploaded documents first ─
+    rag_context, sources = _get_document_rag_context(query)
+    
+    if rag_context:
+        logger.info("Custom RAG: Found uploaded documents context. Querying GLM...")
+        system_prompt = (
+            "You are an expert crime analytics AI assistant for the Karnataka Police department. "
+            "Answer the user's question based strictly on the retrieved document context below. "
+            "Cite the source filenames when presenting facts. Keep the tone helpful, professional, and clear."
+        )
+        prompt = f"Retrieved Document Context:\n{rag_context}\n\nUser Question: {query}"
+        answer = _call_quickml_glm(prompt, system_prompt, request=request)
+        return {"answer": answer, "sources": sources}
+
+    # ── Fallback to default configured Catalyst RAG API if no local documents ─
     if _is_mock_mode():
         logger.info("QuickML RAG: running in LOCAL MOCK mode")
         return _mock_rag_response(query)
@@ -300,12 +428,47 @@ def _call_quickml_rag(query: str, request=None) -> dict:
         "model": settings.QUICKML_LLM_MODEL,
     }
 
+    # Try routing through SDK requester first
+    app = db.get_db_app()
+    if app:
+        try:
+            requester = app.filestore()._requester
+            resp = requester.request(
+                method="POST",
+                path="/rag/answer",
+                json=payload,
+                user="admin",
+                catalyst_service="quickml"
+            )
+            data = resp.response_json
+            if data:
+                answer = (
+                    data.get("answer")
+                    or data.get("response")
+                    or data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    or "No answer returned from knowledge base."
+                )
+                sources = data.get("sources") or data.get("references") or []
+                return {"answer": answer, "sources": sources}
+        except Exception as e:
+            logger.error(f"SDK QuickML RAG call failed: {e}. Trying manual HTTP fallback.")
+
+    token = _get_catalyst_token(request)
+    org_id = settings.QUICKML_ORG_ID
+    url = settings.QUICKML_RAG_ENDPOINT
+
+    headers = {
+        "Content-Type": "application/json",
+        "CATALYST-ORG": org_id,
+    }
+    if token:
+        headers["Authorization"] = f"Zoho-oauthtoken {token}"
+
     try:
         with httpx.Client(timeout=60.0) as client:
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
-            # RAG endpoint returns { answer, sources/references }
             answer = (
                 data.get("answer")
                 or data.get("response")

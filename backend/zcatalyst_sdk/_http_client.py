@@ -215,9 +215,14 @@ class HttpClient:
                         ','.join(filter(lambda x: x is not None, accept_header))
 
         self._base_url = self._base_url or APP_DOMAIN
-
-        url = url or (self._base_url + URL_SEPARATOR + path)
+        if not url:
+            base_url_stripped = self._base_url.rstrip('/')
+            path_stripped = path.lstrip('/')
+            url = base_url_stripped + '/' + path_stripped
+        print(f"DEBUG: SDK REQUEST: {method} {url} with headers {kwargs.get('headers')}")
         resp = self._session.request(method, url, **kwargs)
+        print(f"DEBUG: SDK RESPONSE: {resp.status_code} {resp.text[:200]}")
+
 
         return DefaultHttpResponse(resp)
 

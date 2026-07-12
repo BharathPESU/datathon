@@ -23,18 +23,58 @@ IS_CLOUD = os.getenv("CATALYST_ENVIRONMENT") is not None or os.getenv("CATALYST_
 
 _app = None
 
+STATIC_COLUMN_MAPS = {
+    "state_id": "State_id",
+    "district_id": "District_id",
+    "police_station_id": "Unit_id",
+    "crime_category_id": "CrimeCategory_id",
+    "crime_sub_head_id": "CrimeSubHead_id",
+    "police_person_id": "PolicePerson_id",
+    "case_master_id": "CaseMaster_id",
+    "timestamp": "time_stamp",
+}
+
 def get_db_app():
     global _app
-    if not HAS_SDK or not IS_CLOUD:
+    if not HAS_SDK:
         return None
     if _app is not None:
         return _app
+    
+    # 1. Try initializing as serverless app (for AppSail cloud environment)
     try:
         _app = zcatalyst_sdk.initialize()
         return _app
     except Exception as e:
-        logger.error(f"Failed to initialize Catalyst SDK in cloud: {e}")
-        return None
+        # If serverless initialization fails (e.g., "Catalyst headers are empty" when running locally)
+        # 2. Try initializing locally using the OAuth credentials
+        auth_env = os.getenv("CATALYST_AUTH")
+        token = os.getenv("CATALYST_AUTH_TOKEN")
+        if auth_env or token:
+            try:
+                from zcatalyst_sdk import credentials
+                if auth_env:
+                    cred = None  # Will auto-load ApplicationDefaultCredential from CATALYST_AUTH env var
+                else:
+                    cred = credentials.AccessTokenCredential({
+                        "access_token": token
+                    })
+                options = {
+                    "project_id": "55341000000016001",
+                    "project_key": "60076836035",
+                    "project_domain": "api.catalyst.zoho.in",
+                    "environment": os.getenv("CATALYST_ENVIRONMENT", "Development")
+                }
+                _app = zcatalyst_sdk.initialize_app(credential=cred, options=options)
+                logger.info("✅ Catalyst SDK initialized locally with credentials!")
+                return _app
+            except Exception as ex:
+                logger.error(f"Failed to initialize Catalyst SDK locally: {ex}")
+        else:
+            logger.debug(f"Skipping live Catalyst initialization (no credentials). Using local in-memory DB fallback. Detail: {e}")
+            
+    return None
+
 
 # --- In-memory fallback storage ---
 _tables: dict[str, list[dict]] = {}
@@ -55,20 +95,31 @@ def insert_row(table_name: str, data: dict) -> dict:
     if app:
         try:
             # Safely get all columns to filter out nonexistent ones
-            cols = app.datastore().table(table_name).get_all_columns()
-            live_cols = [c.get("column_name") for c in cols]
-            
-            # Map timestamp to time_stamp if present in live columns
-            mapped_data = {}
-            for k, v in data.items():
-                if k == "timestamp" and "time_stamp" in live_cols and "timestamp" not in live_cols:
-                    mapped_data["time_stamp"] = v
-                else:
-                    mapped_data[k] = v
-                    
-            filtered = {k: v for k, v in mapped_data.items() if k in live_cols}
-            res = app.datastore().table(table_name).insert_row(filtered)
-            return res
+            try:
+                cols = app.datastore().table(table_name).get_all_columns()
+                live_cols = [c.get("column_name") for c in cols]
+                
+                # Map timestamp to time_stamp if present in live columns
+                mapped_data = {}
+                for k, v in data.items():
+                    if k == "timestamp" and "time_stamp" in live_cols and "timestamp" not in live_cols:
+                        mapped_data["time_stamp"] = v
+                    else:
+                        mapped_data[k] = v
+                        
+                filtered = {k: v for k, v in mapped_data.items() if k in live_cols}
+                res = app.datastore().table(table_name).insert_row(filtered)
+                return res
+            except Exception as e_col:
+                logger.warning(f"Could not retrieve column metadata for {table_name}: {e_col}. Proceeding with static mapping fallback.")
+                mapped_data = {}
+                for k, v in data.items():
+                    if k in STATIC_COLUMN_MAPS:
+                        mapped_data[STATIC_COLUMN_MAPS[k]] = v
+                    else:
+                        mapped_data[k] = v
+                res = app.datastore().table(table_name).insert_row(mapped_data)
+                return res
         except Exception as e:
             logger.error(f"Live Datastore insert failed for {table_name}: {e}")
             raise e
@@ -243,3 +294,63 @@ def get_table_stats() -> dict[str, int]:
 
     # Local in-memory fallback
     return {table_name: len(rows) for table_name, rows in _tables.items()}
+
+def update_row(table_name: str, rowid: int, data: dict) -> dict:
+    """Update a row in the datastore by ROWID."""
+    app = get_db_app()
+    if app:
+        try:
+            # Fetch table columns to filter fields
+            try:
+                cols = app.datastore().table(table_name).get_all_columns()
+                live_cols = [c.get("column_name") for c in cols]
+                
+                # Construct update dict, including ROWID
+                update_payload = {"ROWID": rowid}
+                for k, v in data.items():
+                    if k in live_cols:
+                        update_payload[k] = v
+                        
+                res = app.datastore().table(table_name).update_row(update_payload)
+                return res
+            except Exception as e_col:
+                logger.warning(f"Could not retrieve column metadata for {table_name}: {e_col}. Proceeding with static mapping fallback.")
+                update_payload = {"ROWID": rowid}
+                for k, v in data.items():
+                    if k in STATIC_COLUMN_MAPS:
+                        update_payload[STATIC_COLUMN_MAPS[k]] = v
+                    else:
+                        update_payload[k] = v
+                res = app.datastore().table(table_name).update_row(update_payload)
+                return res
+        except Exception as e:
+            logger.error(f"Live Datastore update failed for {table_name} id {rowid}: {e}")
+            raise e
+            
+    # Local in-memory fallback
+    table = _get_table(table_name)
+    for i, row in enumerate(table):
+        if row["ROWID"] == rowid:
+            updated = {**row, **data, "ROWID": rowid}
+            table[i] = updated
+            return updated
+    raise ValueError(f"Row {rowid} not found in {table_name}")
+
+def delete_row(table_name: str, rowid: int) -> bool:
+    """Delete a row from a table by ROWID."""
+    app = get_db_app()
+    if app:
+        try:
+            app.datastore().table(table_name).delete_row(rowid)
+            return True
+        except Exception as e:
+            logger.error(f"Live Datastore delete failed for {table_name} id {rowid}: {e}")
+            raise e
+            
+    # Local in-memory fallback
+    table = _get_table(table_name)
+    for i, row in enumerate(table):
+        if row["ROWID"] == rowid:
+            table.pop(i)
+            return True
+    return False

@@ -71,6 +71,8 @@ class CaseListItem(BaseModel):
     crime_sub_head: Optional[str] = None
     status: Optional[str] = None
     brief_facts: Optional[str] = None
+    police_person_id: Optional[int] = None
+
 
 class CaseDetail(CaseListItem):
     incident_from_date: Optional[str] = None
@@ -87,3 +89,97 @@ class PaginatedResponse(BaseModel):
     total: int = 0
     page: int = 1
     page_size: int = 20
+
+# ---- Input validation schemas ----
+class CaseCreate(BaseModel):
+    crime_no: str
+    case_no: Optional[str] = None
+    crime_registered_date: str
+    incident_from_date: Optional[str] = None
+    incident_to_date: Optional[str] = None
+    police_station_id: int
+    district_id: int
+    case_category_id: Optional[int] = None
+    gravity_offence_id: Optional[int] = None
+    crime_head_id: int
+    crime_sub_head_id: int
+    case_status_id: Optional[int] = None
+    court_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    brief_facts: Optional[str] = None
+
+class CaseUpdate(BaseModel):
+    case_no: Optional[str] = None
+    crime_registered_date: Optional[str] = None
+    incident_from_date: Optional[str] = None
+    incident_to_date: Optional[str] = None
+    police_station_id: Optional[int] = None
+    district_id: Optional[int] = None
+    case_category_id: Optional[int] = None
+    gravity_offence_id: Optional[int] = None
+    crime_head_id: Optional[int] = None
+    crime_sub_head_id: Optional[int] = None
+    case_status_id: Optional[int] = None
+    court_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    brief_facts: Optional[str] = None
+
+class AccusedCreate(BaseModel):
+    accused_name: str
+    age_year: Optional[int] = None
+    gender: Optional[str] = None
+    person_id: Optional[str] = None
+
+class AccusedUpdate(BaseModel):
+    accused_name: Optional[str] = None
+    age_year: Optional[int] = None
+    gender: Optional[str] = None
+    person_id: Optional[str] = None
+
+class VictimCreate(BaseModel):
+    victim_name: str
+    age_year: Optional[int] = None
+    gender: Optional[str] = None
+
+class VictimUpdate(BaseModel):
+    victim_name: Optional[str] = None
+    age_year: Optional[int] = None
+    gender: Optional[str] = None
+
+class ComplainantCreate(BaseModel):
+    complainant_name: str
+    age_year: Optional[int] = None
+    gender: Optional[str] = None
+    occupation_id: Optional[int] = None
+
+class ComplainantUpdate(BaseModel):
+    complainant_name: Optional[str] = None
+    age_year: Optional[int] = None
+    gender: Optional[str] = None
+    occupation_id: Optional[int] = None
+
+class ArrestCreate(BaseModel):
+    type_id: Optional[int] = None
+    arrest_date: Optional[str] = None
+    state_id: Optional[int] = None
+    district_id: Optional[int] = None
+    police_station_id: Optional[int] = None
+    io_id: Optional[int] = None
+    court_id: Optional[int] = None
+    accused_master_id: int
+    is_accused: Optional[int] = None
+    is_complainant_accused: Optional[int] = None
+
+class ArrestUpdate(BaseModel):
+    type_id: Optional[int] = None
+    arrest_date: Optional[str] = None
+    state_id: Optional[int] = None
+    district_id: Optional[int] = None
+    police_station_id: Optional[int] = None
+    io_id: Optional[int] = None
+    court_id: Optional[int] = None
+    accused_master_id: Optional[int] = None
+    is_accused: Optional[int] = None
+    is_complainant_accused: Optional[int] = None
