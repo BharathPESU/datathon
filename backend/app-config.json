@@ -2,7 +2,14 @@
 	"command": "python3 app.py",
 	"build_path": "./",
 	"stack": "python_3_12",
-	"env_variables": {},
+	"env_variables": {
+		"CATALYST_PROJECT_ID": "55341000000016001",
+		"CATALYST_ENVIRONMENT": "Development",
+		"CATALYST_AUTH": "{\"client_id\": \"1000.R6VFC8TUZJWAD7AQLMCDV4ZDONJKRC\", \"client_secret\": \"41326b7868906dbc921e6f4c9dcde423fb2bc8ada2\", \"refresh_token\": \"1000.c938097a8398ac388df0d687ce23ffac.852d19dc1e05cdfe8950b98e7beda802\"}",
+		"X_ZOHO_CATALYST_CONSOLE_URL": "https://api.catalyst.zoho.in",
+		"X_ZOHO_CATALYST_ACCOUNTS_URL": "https://accounts.zoho.in",
+		"X_ZOHO_CATALYST_IS_LOCAL": "true"
+	},
 	"memory": 256,
 	"scripts": {
 		"preserve": "python3 -m pip install -r ./requirements.txt -t ./ --upgrade",
