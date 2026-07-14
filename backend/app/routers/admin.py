@@ -128,7 +128,7 @@ async def approve_user(user_id: int, current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=404, detail="User not found")
 
     user_row["is_active"] = True
-    db.update_row("AppUser", user_row)
+    db.update_row("AppUser", user_id, user_row)
 
     role_key = str(user_row.get("role", "investigator")).lower()
     role_id = ROLE_IDS.get(role_key, ROLE_IDS["investigator"])

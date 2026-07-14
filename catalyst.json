@@ -5,7 +5,10 @@
       "source": "backend"
     }
   ],
-  "slate": {
-    "source": "frontend/out"
-  }
+  "slate": [
+    {
+      "name": "frontend",
+      "source": "frontend/out"
+    }
+  ]
 }
