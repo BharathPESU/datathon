@@ -123,16 +123,12 @@ async def get_user_sessions(
 
     try:
         user_id = current_user["user_id"]
-        query = f"SELECT * FROM ChatSession WHERE user_id = {user_id}"
-        rows = db.execute_query(query)
+        rows = db.query_rows("ChatSession", {"user_id": user_id})
         rows.sort(key=lambda x: x.get("started_at") or "", reverse=True)
         return rows
     except Exception as e:
         logger.error(f"Failed to query ChatSession: {e}")
-        all_sess = db.get_all_rows("ChatSession")
-        filtered = [s for s in all_sess if s.get("user_id") == current_user["user_id"]]
-        filtered.sort(key=lambda x: x.get("started_at") or "", reverse=True)
-        return filtered
+        return []
 
 
 @router.get("/session/{session_uuid}/messages")
@@ -145,16 +141,12 @@ async def get_session_messages(
         raise HTTPException(status_code=403, detail="Permission denied")
 
     try:
-        query = f"SELECT * FROM ChatMessage WHERE session_id = '{session_uuid}'"
-        rows = db.execute_query(query)
+        rows = db.query_rows("ChatMessage", {"session_id": session_uuid})
         rows.sort(key=lambda x: x.get("created_at") or "")
         return rows
     except Exception as e:
         logger.error(f"Failed to query ChatMessage: {e}")
-        all_msg = db.get_all_rows("ChatMessage")
-        filtered = [m for m in all_msg if m.get("session_id") == session_uuid]
-        filtered.sort(key=lambda x: x.get("created_at") or "")
-        return filtered
+        return []
 
 
 @router.post("/session/{session_uuid}/documents")

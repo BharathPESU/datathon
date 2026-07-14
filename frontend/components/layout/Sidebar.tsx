@@ -22,6 +22,27 @@ export default function Sidebar() {
 
   const showAdmin = user?.role === "admin" || user?.role === "supervisor";
 
+  const hasPermission = (permission: string) => {
+    if (!user) return false;
+    const role = user.role.toLowerCase();
+    if (role === "admin") return true;
+    
+    const rolePermissions: Record<string, string[]> = {
+      investigator: [
+        "analytics:basic", "cases:read", "chat:use", "network:read", "risk:read"
+      ],
+      analyst: [
+        "analytics:basic", "cases:read", "chat:use", "network:read", "forecast:read", "risk:read"
+      ],
+      supervisor: [
+        "analytics:basic", "cases:read", "chat:use", "network:read", "forecast:read", "risk:read", "admin:audit"
+      ]
+    };
+    
+    const allowed = rolePermissions[role] || [];
+    return allowed.includes(permission);
+  };
+
   return (
     <aside className="w-[var(--sidebar-width)] bg-[var(--surface-dim)] border-r border-[var(--border)] flex flex-col shrink-0">
       {/* Brand Header */}
@@ -37,9 +58,11 @@ export default function Sidebar() {
 
       {/* Nav Links */}
       <nav className="flex-1 p-4 space-y-1.5">
-        {links.map((link) => {
-          const Icon = link.icon;
-          const isActive = pathname === link.href;
+        {links
+          .filter((link) => hasPermission(link.permission))
+          .map((link) => {
+            const Icon = link.icon;
+            const isActive = pathname === link.href;
           
           return (
             <Link

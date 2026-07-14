@@ -6,14 +6,23 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend 
 } from "recharts";
 import api from "@/lib/api";
+import { useAuthStore } from "@/store/auth";
 
 export default function TrendsPage() {
+  const { user } = useAuthStore();
   const [forecast, setForecast] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [steps, setSteps] = useState(6);
   const [loading, setLoading] = useState(true);
 
+  const role = user?.role?.toLowerCase();
+  const hasAccess = role === "admin" || role === "supervisor" || role === "analyst";
+
   useEffect(() => {
+    if (!hasAccess) {
+      setLoading(false);
+      return;
+    }
     async function loadData() {
       setLoading(true);
       try {
@@ -31,6 +40,18 @@ export default function TrendsPage() {
     }
     loadData();
   }, [steps]);
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <TrendingUp className="w-12 h-12 text-[var(--danger)]" />
+        <h3 className="text-lg font-bold text-white">Access Denied</h3>
+        <p className="text-sm text-[var(--foreground-dim)] text-center max-w-sm">
+          Your current security authorization level ({user?.role}) does not have permission to view predictive crime forecasting models.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
