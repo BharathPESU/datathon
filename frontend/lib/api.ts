@@ -109,7 +109,12 @@ const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+    signup: (data: any) => fetchApi<any>("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
     me: () => fetchApi<any>("/auth/me"),
+    getCustomToken: (email: string) => fetchApi<any>(`/auth/custom-token?email=${encodeURIComponent(email)}`),
   },
   cases: {
     list: (params?: Record<string, any>) => {
@@ -264,6 +269,13 @@ const api = {
     }),
     stats: () => fetchApi<any>("/admin/stats"),
     seedCloud: () => fetchApi<any>("/admin/seed-cloud", {
+      method: "POST"
+    }),
+    listPendingUsers: () => fetchApi<any>("/admin/pending-users"),
+    approveUser: (userId: number) => fetchApi<any>(`/admin/users/${userId}/approve`, {
+      method: "POST"
+    }),
+    rejectUser: (userId: number) => fetchApi<any>(`/admin/users/${userId}/reject`, {
       method: "POST"
     }),
   },

@@ -21,8 +21,15 @@ class UserOut(BaseModel):
     username: str
     role: str
     employee_id: Optional[int] = None
+    is_active: Optional[bool] = True
 
 class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "investigator"
+    employee_id: Optional[int] = None
+
+class SignUpRequest(BaseModel):
     username: str
     password: str
     role: str = "investigator"

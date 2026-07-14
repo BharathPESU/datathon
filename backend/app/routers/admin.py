@@ -81,6 +81,96 @@ async def create_user(req: UserCreate, current_user: dict = Depends(get_current_
         employee_id=user_row.get("employee_id")
     )
 
+
+import logging
+logger = logging.getLogger(__name__)
+
+ROLE_IDS = {
+    "admin": "55341000000057003",
+    "investigator": "55341000000057006",
+    "supervisor": "55341000000070002",
+    "analyst": "55341000000070004"
+}
+
+
+@router.get("/pending-users")
+async def list_pending_users(current_user: dict = Depends(get_current_user)):
+    """List pending registration approval requests (Admin only)."""
+    if current_user["role"].lower() != "admin":
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    users = db.get_all_rows("AppUser")
+    pending = []
+    for u in users:
+        is_active = u.get("is_active")
+        # Check if is_active is False
+        if is_active is False or str(is_active).lower() == "false":
+            pending.append(
+                UserOut(
+                    user_id=u["ROWID"],
+                    username=u["username"],
+                    role=u["role"],
+                    employee_id=u.get("employee_id"),
+                    is_active=False
+                )
+            )
+    return {"users": pending}
+
+
+@router.post("/users/{user_id}/approve")
+async def approve_user(user_id: int, current_user: dict = Depends(get_current_user)):
+    """Approve a pending user registration request, activating it and registering in Catalyst (Admin only)."""
+    if current_user["role"].lower() != "admin":
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    user_row = db.get_row("AppUser", user_id)
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_row["is_active"] = True
+    db.update_row("AppUser", user_row)
+
+    role_key = str(user_row.get("role", "investigator")).lower()
+    role_id = ROLE_IDS.get(role_key, ROLE_IDS["investigator"])
+
+    app = db.get_db_app()
+    if app:
+        try:
+            signup_config = {
+                "platform_type": "web",
+                "redirect_url": "http://localhost:3000/login",
+                "template_details": {
+                    "senders_mail": "verified_email@yourdomain.com", # Update with verified sender email
+                    "subject": "Account Approved - KSP Crime Analytics",
+                    "message": "<p>Hello,</p><p>Your request has been approved! You can now log in: <a href='%LINK%'>Login</a></p>"
+                }
+            }
+            user_details = {
+                "first_name": user_row["username"].split("@")[0],
+                "email_id": user_row["username"],
+                "role_id": role_id
+            }
+            app.authentication().register_user(signup_config, user_details)
+        except Exception as e:
+            logger.error(f"Catalyst signup invitation failed: {e}")
+
+    return {"status": "success", "message": f"User {user_row['username']} approved and activated."}
+
+
+@router.post("/users/{user_id}/reject")
+async def reject_user(user_id: int, current_user: dict = Depends(get_current_user)):
+    """Reject a pending registration request (Admin only)."""
+    if current_user["role"].lower() != "admin":
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    user_row = db.get_row("AppUser", user_id)
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.delete_row("AppUser", user_id)
+    return {"status": "success", "message": f"Registration request for {user_row['username']} rejected."}
+
+
 @router.post("/seed-cloud")
 async def seed_cloud_database(request: Request, current_user: dict = Depends(get_current_user)):
     """Migrates and seeds the active Zoho Catalyst Cloud Data Store (Admin only)."""

@@ -44,17 +44,57 @@ export default function AdminPage() {
     }
   };
 
+  // Pending approvals state
+  const [pendingUsers, setPendingUsers] = useState<any[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+
+  const fetchPendingUsers = async () => {
+    setPendingLoading(true);
+    try {
+      const res = await api.admin.listPendingUsers();
+      setPendingUsers(res.users || []);
+    } catch (err) {
+      console.error("Failed to load pending users", err);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  const handleApproveUser = async (userId: number) => {
+    try {
+      await api.admin.approveUser(userId);
+      await fetchPendingUsers();
+      // Reload logs to show user approval entry
+      const logRes = await api.admin.auditLog({ page: 1, page_size: 10 });
+      setLogs(logRes.items);
+      setTotalLogs(logRes.total);
+    } catch (err) {
+      alert("Failed to approve user");
+    }
+  };
+
+  const handleRejectUser = async (userId: number) => {
+    if (!confirm("Are you sure you want to reject this request?")) return;
+    try {
+      await api.admin.rejectUser(userId);
+      await fetchPendingUsers();
+    } catch (err) {
+      alert("Failed to reject user");
+    }
+  };
+
   useEffect(() => {
     async function loadAdminData() {
       setLoading(true);
       try {
         const [logRes, statsRes] = await Promise.all([
           api.admin.auditLog({ page: logPage, page_size: 10 }),
-          api.admin.stats()
+          api.admin.stats(),
         ]);
         setLogs(logRes.items);
         setTotalLogs(logRes.total);
         setStats(statsRes);
+        await fetchPendingUsers();
       } catch (err) {
         console.error(err);
       } finally {
@@ -244,6 +284,69 @@ export default function AdminPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* Pending User Approvals */}
+      <div className="chart-container">
+        <div className="mb-4">
+          <h3 className="text-sm font-bold flex items-center gap-2">
+            <Users className="w-4.5 h-4.5 text-[var(--primary)]" />
+            <span>Pending Registration Approval Requests</span>
+          </h3>
+          <p className="text-xs text-[var(--foreground-dim)]">Approve invited Gmail users and grant them their selected database access roles</p>
+        </div>
+
+        {pendingLoading ? (
+          <div className="text-xs text-[var(--foreground-dim)]">Loading requests...</div>
+        ) : pendingUsers.length === 0 ? (
+          <div className="p-4 rounded-lg bg-[var(--surface-dim)]/50 border border-[var(--border)] text-xs text-[var(--foreground-dim)] font-medium text-center">
+            No pending registration approval requests.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table text-xs">
+              <thead>
+                <tr>
+                  <th>Username / Email</th>
+                  <th>Requested Role</th>
+                  <th>Employee ID</th>
+                  <th>Status</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingUsers.map((u: any) => (
+                  <tr key={u.user_id}>
+                    <td className="font-semibold text-white">{u.username}</td>
+                    <td>
+                      <span className="badge badge-secondary uppercase text-[9px]">{u.role}</span>
+                    </td>
+                    <td>{u.employee_id || "N/A"}</td>
+                    <td>
+                      <span className="text-[var(--danger)] font-medium flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 animate-pulse" /> Pending Approval
+                      </span>
+                    </td>
+                    <td className="text-right space-x-2">
+                      <button
+                        onClick={() => handleApproveUser(u.user_id)}
+                        className="btn-primary py-1 px-3 text-[10px] font-bold inline-flex items-center gap-1 bg-gradient-to-tr from-[var(--success)] to-green-600 border-none text-white hover:opacity-90 transition-all shadow-sm"
+                      >
+                        <Check className="w-3 h-3" /> Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectUser(u.user_id)}
+                        className="btn-secondary py-1 px-3 text-[10px] font-bold inline-flex items-center gap-1 text-[var(--danger)] border-[var(--danger)]/30 hover:bg-[var(--danger-dim)] transition-all"
+                      >
+                        Reject
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Compliance Audit Logs */}

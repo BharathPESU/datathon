@@ -1,0 +1,23 @@
+# Logs
+*.log
+backend.log
+frontend.log
+
+# Secrets
+*.json
+!catalyst.json
+!catalyst_datastore_schema.json
+client_secret_*.json
+
+# Assets
+ksp.jpeg
+
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+
+# Node / NextJS
+node_modules/
+.next/
+.env
