@@ -342,8 +342,8 @@ export default function CasesPage() {
       {/* Title with Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold gradient-text">Criminal Case Records</h2>
-          <p className="text-xs text-[var(--foreground-dim)]">Search, filter, and inspect case dockets and registered FIRs</p>
+          <h2 className="text-2xl font-semibold text-[var(--foreground)]">Criminal Case Records</h2>
+          <p className="text-sm text-[var(--foreground-muted)] mt-1">Search, filter, and inspect case dockets and registered FIRs</p>
         </div>
         
         {/* Register FIR Button for Investigators/Admins/Supervisors */}
@@ -420,7 +420,7 @@ export default function CasesPage() {
               <tbody>
                 {cases.map((c) => (
                   <tr key={c.ROWID} className="hover:bg-[var(--surface-dim)]/50 transition-colors">
-                    <td className="font-semibold text-white">{c.crime_no}</td>
+                    <td className="font-semibold text-[var(--foreground)]">{c.crime_no}</td>
                     <td>{c.crime_registered_date}</td>
                     <td>{c.district_name}</td>
                     <td>{c.police_station}</td>
@@ -454,7 +454,7 @@ export default function CasesPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-[var(--border)] pt-4 mt-4">
             <span className="text-[11px] text-[var(--foreground-dim)]">
-              Showing page <span className="text-white font-semibold">{page}</span> of <span className="text-white font-semibold">{totalPages}</span> ({total} total records)
+              Showing page <span className="text-[var(--foreground)] font-semibold">{page}</span> of <span className="text-[var(--foreground)] font-semibold">{totalPages}</span> ({total} total records)
             </span>
             <div className="flex gap-2">
               <button 
@@ -485,7 +485,7 @@ export default function CasesPage() {
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-[var(--primary)]" />
-                <h3 className="text-lg font-bold text-white">Register New Crime FIR Record</h3>
+                <h3 className="text-lg font-bold text-[var(--foreground)]">Register New Crime FIR Record</h3>
               </div>
               <button onClick={() => setShowRegisterModal(false)} className="btn-secondary py-1 px-3 text-xs rounded-lg">Cancel</button>
             </div>
@@ -494,7 +494,7 @@ export default function CasesPage() {
               
               {/* Core Case Information */}
               <div className="space-y-4">
-                <h4 className="font-bold text-white border-b border-[var(--border)] pb-1.5 uppercase text-[10px] tracking-wider text-[var(--primary)]">1. General Case Details</h4>
+                <h4 className="font-bold text-[var(--foreground)] border-b border-[var(--border)] pb-1.5 uppercase text-[10px] tracking-wider text-[var(--primary)]">1. General Case Details</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-bold text-[var(--foreground-muted)] uppercase">Crime Number *</label>
@@ -553,7 +553,7 @@ export default function CasesPage() {
 
               {/* Jurisdiction & Legal Selectors */}
               <div className="space-y-4">
-                <h4 className="font-bold text-white border-b border-[var(--border)] pb-1.5 uppercase text-[10px] tracking-wider text-[var(--primary)]">2. Jurisdiction & Classification</h4>
+                <h4 className="font-bold text-[var(--foreground)] border-b border-[var(--border)] pb-1.5 uppercase text-[10px] tracking-wider text-[var(--primary)]">2. Jurisdiction & Classification</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-bold text-[var(--foreground-muted)] uppercase">District Name *</label>
@@ -658,7 +658,7 @@ export default function CasesPage() {
 
               {/* Location & Case Facts */}
               <div className="space-y-4">
-                <h4 className="font-bold text-white border-b border-[var(--border)] pb-1.5 uppercase text-[10px] tracking-wider text-[var(--primary)]">3. Crime Scene Facts</h4>
+                <h4 className="font-bold text-[var(--foreground)] border-b border-[var(--border)] pb-1.5 uppercase text-[10px] tracking-wider text-[var(--primary)]">3. Crime Scene Facts</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-bold text-[var(--foreground-muted)] uppercase">GPS Latitude (Optional)</label>
@@ -738,7 +738,7 @@ export default function CasesPage() {
                     <span className="badge badge-warning text-[9px]">Read-Only</span>
                   )}
                 </div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">{activeCase.crime_no}</h3>
+                <h3 className="text-lg font-bold text-[var(--foreground)] flex items-center gap-2">{activeCase.crime_no}</h3>
                 <p className="text-[11px] text-[var(--foreground-dim)]">Court Case ID: {activeCase.case_no || "N/A"}</p>
               </div>
               
@@ -788,15 +788,15 @@ export default function CasesPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">District</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.district_name}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.district_name}</p>
                     </div>
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Police Station</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.police_station}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.police_station}</p>
                     </div>
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Registered Date</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.crime_registered_date}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.crime_registered_date}</p>
                     </div>
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Investigation Status</span>
@@ -809,30 +809,30 @@ export default function CasesPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[var(--surface-dim)]/50 p-4 border border-[var(--border)] rounded-xl">
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Crime Classification Head</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.crime_head}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.crime_head}</p>
                     </div>
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Offence Sub-Type</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.crime_sub_head}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.crime_sub_head}</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Incident Occurrence From</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.incident_from_date || "N/A"}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.incident_from_date || "N/A"}</p>
                     </div>
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Incident Occurrence To</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.incident_to_date || "N/A"}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.incident_to_date || "N/A"}</p>
                     </div>
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Latitude</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.latitude || "N/A"}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.latitude || "N/A"}</p>
                     </div>
                     <div>
                       <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px]">Longitude</span>
-                      <p className="text-white font-semibold mt-0.5">{activeCase.longitude || "N/A"}</p>
+                      <p className="text-[var(--foreground)] font-semibold mt-0.5">{activeCase.longitude || "N/A"}</p>
                     </div>
                   </div>
 
@@ -849,7 +849,7 @@ export default function CasesPage() {
               {detailTab === "complainants" && (
                 <div className="space-y-4 animate-fade-in text-xs">
                   <div className="flex justify-between items-center">
-                    <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Registered Complainant</h4>
+                    <h4 className="font-bold text-[var(--foreground)] text-[10px] uppercase tracking-wider">Registered Complainant</h4>
                     {hasWriteAccess(activeCase) && activeCase.complainant_list.length === 0 && (
                       <button 
                         onClick={() => openAddEntity("complainant")}
@@ -869,9 +869,9 @@ export default function CasesPage() {
                       {activeCase.complainant_list.map((c: any) => (
                         <div key={c.ROWID} className="flex justify-between items-center bg-[var(--surface-dim)] p-4 rounded-xl border border-[var(--border)]">
                           <div>
-                            <p className="font-bold text-white text-sm">{c.complainant_name}</p>
+                            <p className="font-bold text-[var(--foreground)] text-sm">{c.complainant_name}</p>
                             <p className="text-[10px] text-[var(--foreground-dim)] mt-0.5">
-                              Gender: <span className="text-white">{c.gender}</span> | Age: <span className="text-white">{c.age_year || "Unknown"}</span> | Occupation: <span className="text-[var(--primary)] font-semibold">{c.occupation || "Unemployed / Unknown"}</span>
+                              Gender: <span className="text-[var(--foreground)]">{c.gender}</span> | Age: <span className="text-[var(--foreground)]">{c.age_year || "Unknown"}</span> | Occupation: <span className="text-[var(--primary)] font-semibold">{c.occupation || "Unemployed / Unknown"}</span>
                             </p>
                           </div>
                           
@@ -904,7 +904,7 @@ export default function CasesPage() {
               {detailTab === "accused" && (
                 <div className="space-y-4 animate-fade-in text-xs">
                   <div className="flex justify-between items-center">
-                    <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Accused list ({activeCase.accused_list.length})</h4>
+                    <h4 className="font-bold text-[var(--foreground)] text-[10px] uppercase tracking-wider">Accused list ({activeCase.accused_list.length})</h4>
                     {hasWriteAccess(activeCase) && (
                       <button 
                         onClick={() => openAddEntity("accused")}
@@ -926,10 +926,10 @@ export default function CasesPage() {
                           <div>
                             <div className="flex items-center gap-1.5">
                               <span className="badge badge-danger text-[9px]">{a.person_id || "A"}</span>
-                              <p className="font-bold text-white">{a.accused_name}</p>
+                              <p className="font-bold text-[var(--foreground)]">{a.accused_name}</p>
                             </div>
                             <p className="text-[10px] text-[var(--foreground-dim)] mt-1">
-                              Gender: <span className="text-white">{a.gender}</span> | Age: <span className="text-white">{a.age_year || "Unknown"}</span>
+                              Gender: <span className="text-[var(--foreground)]">{a.gender}</span> | Age: <span className="text-[var(--foreground)]">{a.age_year || "Unknown"}</span>
                             </p>
                           </div>
                           
@@ -960,7 +960,7 @@ export default function CasesPage() {
               {detailTab === "victims" && (
                 <div className="space-y-4 animate-fade-in text-xs">
                   <div className="flex justify-between items-center">
-                    <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Victims list ({activeCase.victim_list.length})</h4>
+                    <h4 className="font-bold text-[var(--foreground)] text-[10px] uppercase tracking-wider">Victims list ({activeCase.victim_list.length})</h4>
                     {hasWriteAccess(activeCase) && (
                       <button 
                         onClick={() => openAddEntity("victim")}
@@ -980,9 +980,9 @@ export default function CasesPage() {
                       {activeCase.victim_list.map((v: any) => (
                         <div key={v.ROWID} className="flex justify-between items-center bg-[var(--surface-dim)] p-4 rounded-xl border border-[var(--border)]">
                           <div>
-                            <p className="font-bold text-white">{v.victim_name}</p>
+                            <p className="font-bold text-[var(--foreground)]">{v.victim_name}</p>
                             <p className="text-[10px] text-[var(--foreground-dim)] mt-1">
-                              Gender: <span className="text-white">{v.gender}</span> | Age: <span className="text-white">{v.age_year || "Unknown"}</span>
+                              Gender: <span className="text-[var(--foreground)]">{v.gender}</span> | Age: <span className="text-[var(--foreground)]">{v.age_year || "Unknown"}</span>
                             </p>
                           </div>
                           
@@ -1013,7 +1013,7 @@ export default function CasesPage() {
               {detailTab === "arrests" && (
                 <div className="space-y-4 animate-fade-in text-xs">
                   <div className="flex justify-between items-center">
-                    <h4 className="font-bold text-white text-[10px] uppercase tracking-wider">Arrests & Surrenders ({activeCase.arrests.length})</h4>
+                    <h4 className="font-bold text-[var(--foreground)] text-[10px] uppercase tracking-wider">Arrests & Surrenders ({activeCase.arrests.length})</h4>
                     {hasWriteAccess(activeCase) && activeCase.accused_list.length > 0 && (
                       <button 
                         onClick={() => openAddEntity("arrest")}
@@ -1040,10 +1040,10 @@ export default function CasesPage() {
                                 <span className={`badge ${arr.is_accused ? "badge-danger" : "badge-warning"}`}>
                                   {arr.is_accused ? "Arrested Accused" : "Surrendered"}
                                 </span>
-                                <p className="font-bold text-white">{acc?.accused_name || `Accused #${arr.accused_master_id}`}</p>
+                                <p className="font-bold text-[var(--foreground)]">{acc?.accused_name || `Accused #${arr.accused_master_id}`}</p>
                               </div>
                               <p className="text-[10px] text-[var(--foreground-dim)] mt-1.5">
-                                Logged Date: <span className="text-white font-medium">{arr.arrest_date || "N/A"}</span>
+                                Logged Date: <span className="text-[var(--foreground)] font-medium">{arr.arrest_date || "N/A"}</span>
                               </p>
                             </div>
                             
@@ -1082,7 +1082,7 @@ export default function CasesPage() {
       {entityModalType && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-card w-full max-w-md p-6 space-y-4 animate-slide-in border border-[var(--border)]">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[var(--border)] pb-2">
+            <h3 className="text-sm font-bold text-[var(--foreground)] uppercase tracking-wider border-b border-[var(--border)] pb-2">
               {editingEntity ? "Edit" : "Add New"} {entityModalType.toUpperCase()} Record
             </h3>
 

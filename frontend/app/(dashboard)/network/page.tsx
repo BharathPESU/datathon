@@ -345,8 +345,8 @@ export default function NetworkPage() {
       {/* Header and Toggle */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold gradient-text">Intelligence Link Analysis</h2>
-          <p className="text-xs text-[var(--foreground-dim)]">
+          <h2 className="text-2xl font-semibold text-[var(--foreground)]">Intelligence Link Analysis</h2>
+          <p className="text-sm text-[var(--foreground-muted)] mt-1">
             Explore mapped co-offence syndicates or build an interactive case board to link suspects, facts, and custom notes.
           </p>
         </div>
@@ -357,7 +357,7 @@ export default function NetworkPage() {
             onClick={() => setPageMode("canvas")}
             className={`flex-1 md:flex-none py-1.5 px-4 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
               pageMode === "canvas"
-                ? "bg-[var(--primary)] text-white shadow-md shadow-[var(--primary-glow)]/10"
+                ? "bg-[var(--primary)] text-[var(--foreground)] shadow-md shadow-[var(--primary-glow)]/10"
                 : "text-[var(--foreground-dim)] hover:text-white"
             }`}
           >
@@ -368,7 +368,7 @@ export default function NetworkPage() {
             onClick={() => setPageMode("syndicate")}
             className={`flex-1 md:flex-none py-1.5 px-4 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
               pageMode === "syndicate"
-                ? "bg-[var(--primary)] text-white shadow-md"
+                ? "bg-[var(--primary)] text-[var(--foreground)] shadow-md"
                 : "text-[var(--foreground-dim)] hover:text-white"
             }`}
           >
@@ -419,7 +419,7 @@ export default function NetworkPage() {
                   nodeLabel="name"
                   nodeColor={(node: any) => node.color}
                   nodeVal={(node: any) => node.val}
-                  linkColor={() => "rgba(255,255,255,0.15)"}
+                  linkColor={() => "rgba(0,0,0,0.15)"}
                   linkWidth={1.5}
                   nodeCanvasObject={(node: any, ctx: any, globalScale: number) => {
                     const label = node.name;
@@ -430,10 +430,11 @@ export default function NetworkPage() {
                     ctx.arc(node.x, node.y, node.val / 1.5, 0, 2 * Math.PI, false);
                     ctx.fill();
 
-                    // Label text
-                    ctx.fillStyle = "rgba(11,15,25,0.8)";
+                    // Label text background shadow
+                    ctx.fillStyle = "rgba(255,255,255,0.8)";
                     ctx.fillText(label, node.x + node.val / 1.3, node.y + fontSize / 3.5);
-                    ctx.fillStyle = node.type === "accused" ? "#FFFFFF" : "var(--foreground-muted)";
+                    // Actual text
+                    ctx.fillStyle = "#111827";
                     ctx.fillText(label, node.x + node.val / 1.3, node.y + fontSize / 3.5);
                   }}
                   onNodeClick={handleNodeClick}
@@ -461,7 +462,7 @@ export default function NetworkPage() {
                     {c.members.join(", ")}
                   </div>
                   <div className="text-[11px] text-[var(--foreground-dim)]">
-                    Linked across <span className="text-white font-semibold">{c.case_count} offences</span>
+                    Linked across <span className="text-[var(--foreground)] font-semibold">{c.case_count} offences</span>
                   </div>
                 </div>
               ))}
@@ -522,7 +523,7 @@ export default function NetworkPage() {
               
               {/* Wiring Help tooltip */}
               <div className="absolute top-4 left-4 z-20 bg-black/70 backdrop-blur-md border border-[var(--border)] rounded-lg p-3 text-[10px] text-[var(--foreground-muted)] max-w-xs space-y-1">
-                <p className="font-semibold text-white flex items-center gap-1">
+                <p className="font-semibold text-[var(--foreground)] flex items-center gap-1">
                   <HelpCircle className="w-3.5 h-3.5 text-[var(--primary)]" /> Canvas Instructions
                 </p>
                 <p>• <b>Drag headers</b> to position suspect & case cards.</p>
@@ -630,7 +631,7 @@ export default function NetworkPage() {
                       onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                     >
                       {/* Node Header */}
-                      <div className="flex items-center justify-between cursor-move bg-white/5 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase text-white truncate">
+                      <div className="flex items-center justify-between cursor-move bg-white/5 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase text-[var(--foreground)] truncate">
                         <span className="truncate">{node.type}</span>
                         <div className="flex items-center gap-1.5">
                           <button
@@ -654,7 +655,7 @@ export default function NetworkPage() {
 
                       {/* Node Content */}
                       <div className="flex-1 flex flex-col justify-center py-2 px-1">
-                        <p className="text-xs font-bold text-white leading-tight truncate">{node.label}</p>
+                        <p className="text-xs font-bold text-[var(--foreground)] leading-tight truncate">{node.label}</p>
                         {node.type === "suspect" && (
                           <span className="text-[9px] text-amber-300 mt-0.5">Primary Accused</span>
                         )}
@@ -711,7 +712,7 @@ export default function NetworkPage() {
           <div className="w-full lg:w-80 chart-container max-h-[670px] overflow-y-auto flex flex-col justify-between">
             <div className="space-y-6 text-xs">
               <div className="border-b border-[var(--border)] pb-3">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1">
+                <h3 className="text-sm font-bold text-[var(--foreground)] uppercase tracking-wider flex items-center gap-1">
                   🔍 Point Analysis
                 </h3>
                 <p className="text-[10px] text-[var(--foreground-dim)]">Inspect facts and cross-references of nodes</p>
@@ -733,7 +734,7 @@ export default function NetworkPage() {
                     } uppercase text-[9px] font-bold`}>
                       {selectedNode.type} Node
                     </span>
-                    <h4 className="text-base font-bold text-white mt-1.5">{selectedNode.label}</h4>
+                    <h4 className="text-base font-bold text-[var(--foreground)] mt-1.5">{selectedNode.label}</h4>
                   </div>
 
                   {/* Case Node details */}
@@ -741,15 +742,15 @@ export default function NetworkPage() {
                     <div className="space-y-3">
                       <div>
                         <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Registered Date</span>
-                        <p className="text-white font-semibold">{selectedNode.details.crime_registered_date}</p>
+                        <p className="text-[var(--foreground)] font-semibold">{selectedNode.details.crime_registered_date}</p>
                       </div>
                       <div>
                         <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Jurisdiction Station</span>
-                        <p className="text-white font-semibold">{selectedNode.details.police_station}</p>
+                        <p className="text-[var(--foreground)] font-semibold">{selectedNode.details.police_station}</p>
                       </div>
                       <div>
                         <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">District</span>
-                        <p className="text-white font-semibold">{selectedNode.details.district_name}</p>
+                        <p className="text-[var(--foreground)] font-semibold">{selectedNode.details.district_name}</p>
                       </div>
                       <div>
                         <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Offence Sub-Head</span>
@@ -770,11 +771,11 @@ export default function NetworkPage() {
                       <div className="grid grid-cols-2 gap-2 bg-[var(--surface-dim)] p-2.5 rounded-lg border border-[var(--border)]">
                         <div>
                           <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Age</span>
-                          <p className="text-white font-semibold">{selectedNode.details.age_year || "Unknown"}</p>
+                          <p className="text-[var(--foreground)] font-semibold">{selectedNode.details.age_year || "Unknown"}</p>
                         </div>
                         <div>
                           <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Gender</span>
-                          <p className="text-white font-semibold">{selectedNode.details.gender}</p>
+                          <p className="text-[var(--foreground)] font-semibold">{selectedNode.details.gender}</p>
                         </div>
                       </div>
 
@@ -782,7 +783,7 @@ export default function NetworkPage() {
                         <>
                           <div>
                             <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Linked FIR No</span>
-                            <p className="text-white font-semibold flex items-center gap-1">
+                            <p className="text-[var(--foreground)] font-semibold flex items-center gap-1">
                               {selectedNode.details.crime_no}
                               {selectedNode.type === "related" && (
                                 <span className="badge badge-warning text-[8px] py-0">Similar Case</span>
@@ -791,7 +792,7 @@ export default function NetworkPage() {
                           </div>
                           <div>
                             <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Police Station / Area</span>
-                            <p className="text-white font-semibold">{selectedNode.details.police_station} ({selectedNode.details.district_name})</p>
+                            <p className="text-[var(--foreground)] font-semibold">{selectedNode.details.police_station} ({selectedNode.details.district_name})</p>
                           </div>
                           <div>
                             <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Crime Sub-Head Type</span>
@@ -813,7 +814,7 @@ export default function NetworkPage() {
                     <div className="space-y-3">
                       <div>
                         <span className="block font-bold text-[var(--foreground-dim)] text-[9px] uppercase">Note Description</span>
-                        <p className="text-white bg-[var(--surface-dim)] p-3 rounded-lg border border-[var(--border)] leading-relaxed font-sans whitespace-pre-line mt-1">
+                        <p className="text-[var(--foreground)] bg-[var(--surface-dim)] p-3 rounded-lg border border-[var(--border)] leading-relaxed font-sans whitespace-pre-line mt-1">
                           {selectedNode.details?.description || "No text description added."}
                         </p>
                       </div>
@@ -838,7 +839,7 @@ export default function NetworkPage() {
       {showCustomNodeModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-card w-full max-w-md p-6 space-y-4 animate-slide-in border border-[var(--border)] text-xs">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-[var(--border)] pb-2">
+            <h3 className="text-sm font-bold text-[var(--foreground)] uppercase tracking-wider border-b border-[var(--border)] pb-2">
               Add Custom {customNodeType === "note" ? "Note Memo" : "Suspect Point"} to Canvas
             </h3>
 

@@ -248,3 +248,24 @@ async def delete_session_document(
     delete_kb_row(session_uuid, file_id)
 
     return {"status": "success", "message": "Session document deleted successfully"}
+
+
+@router.post("/transcribe")
+async def transcribe_audio(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Transcribe audio file via QuickML."""
+    if not can_access(current_user["role"], "chat:use"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty audio file upload")
+
+    try:
+        text = QuickMLService.transcribe_audio(content, file.filename, request=request)
+        return {"status": "success", "text": text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

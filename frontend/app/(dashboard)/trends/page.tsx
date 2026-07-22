@@ -45,7 +45,7 @@ export default function TrendsPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
         <TrendingUp className="w-12 h-12 text-[var(--danger)]" />
-        <h3 className="text-lg font-bold text-white">Access Denied</h3>
+        <h3 className="text-lg font-bold text-[var(--foreground)]">Access Denied</h3>
         <p className="text-sm text-[var(--foreground-dim)] text-center max-w-sm">
           Your current security authorization level ({user?.role}) does not have permission to view predictive crime forecasting models.
         </p>
@@ -68,15 +68,15 @@ export default function TrendsPage() {
       {/* Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold gradient-text">Recidivism Forecasts & Trends</h2>
-          <p className="text-xs text-[var(--foreground-dim)]">Polynomial regression caseload projections and geographical comparative graphs</p>
+          <h2 className="text-2xl font-semibold text-[var(--foreground)]">Recidivism Forecasts & Trends</h2>
+          <p className="text-sm text-[var(--foreground-muted)] mt-1">Polynomial regression caseload projections and geographical comparative graphs</p>
         </div>
 
         {/* Steps selector */}
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-[var(--foreground-dim)]">Projections:</span>
           <select 
-            className="input py-1 text-xs w-28 bg-[var(--surface-dim)] border-[var(--border)] text-white outline-none cursor-pointer"
+            className="input py-1 text-xs w-28 cursor-pointer"
             value={steps}
             onChange={(e) => setSteps(parseInt(e.target.value))}
           >
@@ -105,8 +105,8 @@ export default function TrendsPage() {
             <AreaChart data={forecast} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="var(--brand-teal)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--brand-teal)" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="colorConfidence" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.1}/>
@@ -119,7 +119,7 @@ export default function TrendsPage() {
               <Tooltip contentStyle={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
               <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 11 }} />
               <Area type="monotone" dataKey="confidence_upper" stroke="transparent" fill="url(#colorConfidence)" name="Confidence Boundary (Upper)" />
-              <Area type="monotone" dataKey="predicted_count" stroke="var(--primary)" strokeWidth={2} fill="url(#colorPredicted)" name="Projected Caseload" />
+              <Area type="monotone" dataKey="predicted_count" stroke="var(--brand-teal)" strokeWidth={2} fill="url(#colorPredicted)" name="Projected Caseload" />
               <Area type="monotone" dataKey="confidence_lower" stroke="transparent" fill="transparent" name="Confidence Boundary (Lower)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -143,7 +143,7 @@ export default function TrendsPage() {
               <XAxis dataKey="district" stroke="var(--foreground-dim)" fontSize={10} />
               <YAxis stroke="var(--foreground-dim)" fontSize={10} />
               <Tooltip contentStyle={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} />
-              <Bar dataKey="count" fill="var(--accent)" name="Total Cases" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="count" fill="var(--brand-teal)" name="Total Cases" radius={[4, 4, 0, 0]}>
                 {districts.map((entry: any, index: number) => (
                   <Area key={`bar-${index}`} type="monotone" dataKey="count" />
                 ))}

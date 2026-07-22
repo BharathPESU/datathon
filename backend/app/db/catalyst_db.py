@@ -248,7 +248,7 @@ def execute_query(zcql_query: str) -> list[dict]:
     
     where_match = re.search(r'(?i)where\s+(.+?)(?=\s+order\s+by|\s+limit|$)', zcql_query)
     if where_match:
-        conditions = re.findall(r'([a-zA-Z0-9_]+)\s*=\s*[\'\"]?([^\'\"]+?)[\'\"]?(?=\s+and\s*|\s*$)')
+        conditions = re.findall(r'([a-zA-Z0-9_]+)\s*=\s*[\'\"]?([^\'\"]+?)[\'\"]?(?=\s+and\s*|\s*$)', where_match.group(1))
         for col, val in conditions:
             if val.isdigit():
                 val = int(val)

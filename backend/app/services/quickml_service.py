@@ -489,158 +489,111 @@ class QuickMLService:
     @staticmethod
     def query_database(user_query: str, request=None) -> dict:
         """
-        Two-Prompt Database Pipeline:
-        1. Prompt 1: User Query + Datastore Schema → Choose Tables and Columns
-        2. Generate & Execute ZCQL based on selected tables and columns.
-        3. Prompt 2: User Query + Chosen Tables/Columns + Retrieved Database Rows → Answer and Summary (using glm-4.7-flash).
+        New Database Pipeline:
+        Schema Provider -> AI Query Generator -> Validation -> Execute -> AI Analyzer
         """
-        # Load database schema
-        schema_path = "/home/bharath/Desktop/projects/datathon/catalyst_datastore_schema.json"
-        schema_json = "{}"
-        try:
-            if os.path.exists(schema_path):
-                with open(schema_path, "r", encoding="utf-8") as f:
-                    schema_data = json.load(f)
-                schema_json = json.dumps(schema_data, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to read datastore schema: {e}")
-
-        # ── Prompt 1: Select Tables & Columns ──
-        prompt_1_system = f"""You are a Database Schema Selector AI.
-Analyze the user's natural language question and the datastore schema below. Identify the minimum set of tables and columns needed to fetch the required information to answer the question.
-
-Datastore Schema:
-{schema_json}
-
-You MUST return ONLY a valid JSON object matching this structure:
-{{
-    "tables": ["TableName1", "TableName2"],
-    "columns": ["TableName1.column_name1", "TableName2.column_name2"]
-}}
-Do NOT include markdown, explanations, or code block markers (like ```json). Return raw JSON only."""
-
-        prompt_1_user = f"Question: {user_query}"
+        from app.services.nl2sql_service import nl2sql_pipeline
         
-        selected_tables_columns = {"tables": [], "columns": []}
-        intent = "search_cases"
-        try:
-            p1_response = _call_quickml_glm(prompt_1_user, prompt_1_system, request)
-            # Strip markdown fences if present
-            if "```json" in p1_response:
-                p1_response = p1_response.split("```json")[-1].split("```")[0].strip()
-            elif "```" in p1_response:
-                p1_response = p1_response.split("```")[-1].split("```")[0].strip()
-            selected_tables_columns = json.loads(p1_response)
-            logger.info(f"Prompt 1 selected tables & columns: {selected_tables_columns}")
-        except Exception as e:
-            logger.error(f"Prompt 1 (schema selection) failed: {e}")
-
-        # ── Step 2: Generate ZCQL Query based on Selected Tables and Columns ──
-        tables = selected_tables_columns.get("tables", [])
-        columns = selected_tables_columns.get("columns", [])
+        result = nl2sql_pipeline.run_pipeline(user_query)
         
-        zcql = ""
-        rows = []
+        # Format the structured result into a nice markdown/text response
+        summary = result.get("summary", "")
+        insights = result.get("insights", [])
+        stats = result.get("statistics", {})
+        zcql = result.get("zcql", "")
+        data = result.get("data", [])
         
-        if tables and columns:
-            prompt_zcql_system = f"""You are a ZCQL (Zoho Catalyst Query Language) generator.
-Generate a valid SELECT query that joins and fetches the selected tables and columns to answer the user's question.
-
-Selected Tables: {json.dumps(tables)}
-Selected Columns: {json.dumps(columns)}
-
-Rules for ZCQL:
-- Select only columns from the list.
-- Use explicit JOINs on primary/foreign keys (e.g., CaseMaster.district_id = District.ROWID).
-- Use proper aliases or fully qualified names.
-- Always include the primary key ROWID of the main tables (e.g., CaseMaster.ROWID, Accused.ROWID).
-- Limit the results to 50 rows (LIMIT 50).
-- Return ONLY the ZCQL statement as a single line. Do not include markdown code block syntax."""
-
-            prompt_zcql_user = f"User Question: {user_query}"
-            try:
-                p_zcql_response = _call_quickml_glm(prompt_zcql_user, prompt_zcql_system, request)
-                if "```sql" in p_zcql_response:
-                    p_zcql_response = p_zcql_response.split("```sql")[-1].split("```")[0].strip()
-                elif "```" in p_zcql_response:
-                    p_zcql_response = p_zcql_response.split("```")[-1].split("```")[0].strip()
-                zcql = p_zcql_response.strip().replace("\n", " ")
-                logger.info(f"Generated ZCQL: {zcql}")
+        content_parts = []
+        if summary:
+            content_parts.append(f"SUMMARY:\n{summary}")
+            
+        if insights:
+            content_parts.append("\nKEY INSIGHTS:")
+            for insight in insights:
+                content_parts.append(f"• {insight}")
                 
-                # Execute ZCQL
-                rows = _execute_zcql(zcql, request, intent=intent)
-            except Exception as e:
-                logger.error(f"Generated ZCQL execution failed: {e}. Falling back to standard pipeline.")
-                zcql = ""
-
-        # Fallback to standard pipeline if ZCQL was not generated or failed
-        if not zcql or not rows:
-            classification = NL2SQLService.classify_query(user_query)
-            intent = classification.get("intent", "general_chat")
-            params = classification.get("params", {})
-            zcql = _build_zcql_from_intent(intent, params)
-            logger.info(f"Fallback executing ZCQL: {zcql}")
-            try:
-                rows = _execute_zcql(zcql, request, intent=intent, params=params)
-            except Exception as e:
-                return {
-                    "content": f"Database query failed: {str(e)}",
-                    "retrieved_refs": [],
-                    "intent": intent,
-                    "sql": zcql,
-                }
-
-        # ── Prompt 2: Answering and Summarization (using glm-4.7-flash) ──
-        context_rows = rows[:15]  # cap at 15 to stay within token budget
+        if stats:
+            content_parts.append("\nSTATISTICS:")
+            for k, v in stats.items():
+                content_parts.append(f"• {k}: {v}")
+                
+        if zcql:
+            content_parts.append(f"\nEXACT ZCQL QUERY USED:\n{zcql}")
+            
+        if data and len(data) > 0:
+            content_parts.append(f"\n(Found {len(data)} matching records)")
+            
+        content = "\n".join(content_parts)
         
-        prompt_2_system = f"""You are an expert crime analytics AI assistant for the Karnataka Police department.
-Answer the user's question factually based ONLY on the retrieved database data below.
-
-Selected Tables & Columns:
-{json.dumps(selected_tables_columns, indent=2)}
-
-Retrieved Database Rows (with exact Row IDs and Data):
-{json.dumps(context_rows, default=str, indent=2)}
-
-Instructions:
-1. Provide a detailed answer containing the exact rows, IDs (ROWID), and data values retrieved.
-2. Provide a clear, concise summary of the findings at the end.
-3. Cite case numbers (crime_no) or accused names wherever relevant.
-4. Format your response in clean, readable prose with bullet points where helpful.
-5. Do not make up any data or IDs not present in the retrieved rows.
-"""
-
-        prompt_2_user = f"Question: {user_query}"
-        
-        try:
-            answer = _call_quickml_glm(prompt_2_user, prompt_2_system, request, rows=context_rows, intent=intent, sql=zcql, model="glm-4.7-flash")
-        except Exception as e:
-            logger.error(f"Prompt 2 failed: {e}. Using fallback generator.")
-            if rows:
-                answer = f"Based on the database query, I found {len(rows)} records.\n\n"
-                for row in rows[:5]:
-                    crime_no = row.get("crime_no", row.get("ROWID", "?"))
-                    brief = str(row.get("brief_facts", row.get("emp_name", "")))[:120]
-                    answer += f"• Row ID {row.get('ROWID')}: {crime_no} - {brief}\n"
-            else:
-                answer = "No records were found matching your query in the database."
-
-        # Build citation refs from case rows
+        # Provide some dummy refs so frontend doesn't crash if it expects them
         refs = []
-        for row in context_rows:
-            if "crime_no" in row:
+        if data:
+            for row in data[:5]:
+                # Extract ROWID and crime_no dynamically since they might have table prefixes
+                rowid = row.get("ROWID") or row.get("CaseMaster.ROWID") or 0
+                crime_no = row.get("crime_no") or row.get("CaseMaster.crime_no") or "Record"
                 refs.append({
-                    "case_master_id": row.get("ROWID", 0),
-                    "crime_no": row.get("crime_no"),
-                    "snippet": str(row.get("brief_facts", ""))[:200],
+                    "case_master_id": rowid,
+                    "crime_no": crime_no,
+                    "snippet": json.dumps(row)
                 })
 
         return {
-            "content": answer,
+            "content": content,
             "retrieved_refs": refs,
-            "intent": intent,
+            "intent": "database_analytics",
             "sql": zcql,
         }
+
+
+    @staticmethod
+    def transcribe_audio(audio_bytes: bytes, filename: str, request=None) -> str:
+        """
+        Transcribes audio using Zoho Zia Audio Transcribe API.
+        """
+        token = _get_catalyst_token(request)
+        if not token:
+            # Fallback to fetching using refresh token if missing
+            auth_str = os.getenv("CATALYST_AUTH")
+            if auth_str:
+                import json
+                try:
+                    auth = json.loads(auth_str)
+                    res = httpx.post("https://accounts.zoho.in/oauth/v2/token", data={
+                        "client_id": auth["client_id"],
+                        "client_secret": auth["client_secret"],
+                        "refresh_token": auth["refresh_token"],
+                        "grant_type": "refresh_token"
+                    })
+                    if res.status_code == 200:
+                        token = res.json().get("access_token")
+                except Exception as e:
+                    logger.error(f"Failed to fetch token for transcription: {e}")
+
+        if not token:
+            raise Exception("No valid Zoho token available for transcription")
+
+        url = "https://api.catalyst.zoho.in/quickml/api/v1/models/zia/audio/transcribe"
+        headers = {
+            "CATALYST-ORG": "60076836035",
+            "Authorization": f"Zoho-oauthtoken {token}"
+        }
+
+        # Send multipart/form-data
+        files = {"file": (filename, audio_bytes, "audio/wav")}
+        
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post(url, headers=headers, files=files)
+                resp.raise_for_status()
+                data = resp.json()
+                # The response structure from Zia transcribe usually contains 'text' or similar. 
+                # Let's extract the text. If we don't know the exact structure, we'll return the whole data or handle common fields.
+                # Common fields: 'text', 'transcription', 'data', etc.
+                return data.get("text", data.get("transcription", json.dumps(data)))
+        except Exception as e:
+            logger.error(f"Zia audio transcribe failed: {e}")
+            raise
 
     @staticmethod
     def query_knowledge_base(user_query: str, session_uuid: str = None, request=None) -> dict:

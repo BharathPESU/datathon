@@ -1,106 +1,209 @@
 import json
 import logging
-from app.core.nim_client import chat_completion
+import os
+import re
+from openai import OpenAI
 from app.core.config import settings
+from app.db import catalyst_db as db
 
 logger = logging.getLogger(__name__)
 
 class NL2SQLService:
-    @staticmethod
-    def classify_query(query_text: str) -> dict:
-        """
-        Classifies user query intent and extracts parameters using NVIDIA NIM.
-        Falls back to local keyword parsing if NIM is offline/unauthenticated.
-        """
-        # 1. Fallback Offline Classification (Keyword-based)
-        fallback_response = {
-            "intent": "general_chat",
-            "params": {}
-        }
-
-        qt = query_text.lower()
-
-        # Domain keyword sets for smarter extraction
-        _crime_types = {"murder","theft","robbery","assault","rape","kidnap","fraud","cyber","arson",
-                        "dacoity","burglary","extortion","cheating","accident","drug","narcotic","abduction"}
-        _district_map = {"bengaluru":"Bengaluru Urban","mysuru":"Mysuru","mangaluru":"Mangaluru",
-                         "hubli":"Hubballi","hubballi":"Hubballi","belagavi":"Belagavi","davangere":"Davangere",
-                         "tumakuru":"Tumakuru","shivamogga":"Shivamogga","kalaburagi":"Kalaburagi"}
-        _stop = {"show","me","find","all","cases","in","with","a","an","the","of","about","for","from","on",
-                 "involving","related","to","and","or","is","are","was","what","which","who","how","any",
-                 "list","get","give","please","latest","recent","last","top"}
-
-        def _extract_keywords(text: str) -> str:
-            """Return space-joined meaningful keywords from a user query."""
-            words = text.lower().split()
-            meaningful = []
-            for w in words:
-                clean = w.strip("?.,'\"!")
-                if clean in _stop or len(clean) < 3:
-                    continue
-                meaningful.append(clean)
-            return " ".join(meaningful)
-
-        if "offender" in qt or "repeat" in qt or "recidivism" in qt:
-            fallback_response["intent"] = "repeat_offenders"
-            min_c = 3 if "3" in qt else (2 if "2" in qt else 2)
-            fallback_response["params"] = {"min_cases": min_c}
-        elif "trend" in qt or "forecast" in qt or "hotspot" in qt or "density" in qt or "latest" in qt:
-            fallback_response["intent"] = "trends"
-            fallback_response["params"] = {"group_by": "month"}
-        else:
-            # search_cases: extract crime type + district keywords
-            kw_parts = []
-            for crime in _crime_types:
-                if crime in qt:
-                    kw_parts.append(crime)
-            for alias, district in _district_map.items():
-                if alias in qt:
-                    kw_parts.append(alias)
-            if not kw_parts:
-                kw_parts = [_extract_keywords(query_text)]
-            keyword = " ".join(kw_parts).strip() or _extract_keywords(query_text)
-            fallback_response["intent"] = "search_cases"
-            fallback_response["params"] = {"keyword": keyword}
-
-        if not settings.NVIDIA_API_KEY or settings.NVIDIA_API_KEY == "dummy-key":
-            logger.info("Using local keyword fallback for query intent classification")
-            return fallback_response
-
-
-        # 2. NVIDIA NIM Enhanced Classification
-        system_prompt = """
-        You are a Crime Database Assistant. Classify user intent and extract query parameters.
-        Respond ONLY with a valid JSON object matching this schema:
-        {
-            "intent": "general_chat" | "search_cases" | "repeat_offenders" | "trends" | "risk_profile",
-            "params": {
-                "keyword": string (optional, search terms for case facts),
-                "district_name": string (optional, e.g. "Bengaluru Urban"),
-                "min_cases": integer (optional, for repeat offenders),
-                "crime_type": string (optional, e.g. "Murder", "Theft"),
-                "accused_id": integer (optional, for risk profile lookups)
-            }
-        }
-        Do not include markdown or explanations. Return JSON only.
-        """
+    def __init__(self):
+        self.schema_path = "/home/bharath/Desktop/projects/datathon/catalyst_datastore_schema.json"
         
+        # Initialize OpenAI client for NVIDIA NIM
+        api_key = settings.NVIDIA_API_KEY
+        if not api_key:
+            api_key = "dummy-key"
+        import httpx
+        http_client = httpx.Client()
+        self.client = OpenAI(
+            base_url=settings.NIM_BASE_URL,
+            api_key=api_key,
+            http_client=http_client
+        )
+        self.model = settings.NIM_MODEL
+        
+    def _get_schema(self) -> str:
+        """Schema Provider"""
+        try:
+            if os.path.exists(self.schema_path):
+                with open(self.schema_path, "r", encoding="utf-8") as f:
+                    schema_data = json.load(f)
+                return json.dumps(schema_data, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to read datastore schema: {e}")
+        return "{}"
+
+    def _generate_query(self, user_query: str, schema: str) -> str:
+        """AI Query Generator"""
+        system_prompt = f"""You are a ZCQL (Zoho Catalyst Query Language) generator.
+Your task is to convert the user's natural language question into a valid ZCQL SELECT query based on the following schema.
+
+Datastore Schema:
+{schema}
+
+Rules for ZCQL:
+1. Output ONLY the raw ZCQL query. Do not include markdown formatting (like ```sql), markdown blocks, or any explanations.
+2. ZCQL does not support '*' in SELECT if you are joining. Use specific columns or TableName.ColumnName.
+3. Use explicit JOINs or WHERE conditions to link foreign keys.
+4. Always LIMIT the results to a maximum of 50.
+5. Do not use any DML statements (INSERT, UPDATE, DELETE). Only SELECT is allowed.
+"""
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Classify this query: {query_text}"}
+            {"role": "user", "content": user_query}
         ]
         
         try:
-            response_text = chat_completion(messages, temperature=0.1)
-            # Strip markdown code blocks if the LLM output contains them
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[-1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[-1].split("```")[0].strip()
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=500,
+                stream=False
+            )
+            raw_query = response.choices[0].message.content.strip()
             
-            parsed = json.loads(response_text)
-            logger.info(f"NIM classified query: {parsed}")
-            return parsed
+            # Clean up potential markdown if the model disobeys
+            if "```sql" in raw_query:
+                raw_query = raw_query.split("```sql")[-1].split("```")[0].strip()
+            elif "```" in raw_query:
+                raw_query = raw_query.split("```")[-1].split("```")[0].strip()
+                
+            return raw_query.replace("\n", " ").strip()
         except Exception as e:
-            logger.error(f"NIM classification failed: {e}. Falling back to keywords.")
-            return fallback_response
+            logger.error(f"AI Query Generation failed: {e}")
+            raise Exception(f"Failed to generate query: {e}")
+
+    def _validate_query(self, query: str) -> str:
+        """Query Validation Layer"""
+        query_lower = query.lower()
+        
+        # Block dangerous SQL
+        dangerous_keywords = ["insert", "update", "delete", "drop", "alter", "truncate", "create", "grant", "revoke"]
+        for keyword in dangerous_keywords:
+            if re.search(rf"\b{keyword}\b", query_lower):
+                raise Exception(f"Dangerous SQL detected: {keyword} operations are not allowed.")
+                
+        # Basic syntax check
+        if not query_lower.startswith("select"):
+            raise Exception("Invalid query: Only SELECT statements are allowed.")
+            
+        return query
+
+    def _execute_query(self, query: str) -> list[dict]:
+        """Execute Query on Zoho Catalyst Datastore"""
+        try:
+            # We use our existing db wrapper to execute the ZCQL query
+            rows = db.execute_query(query)
+            
+            # Flatten Catalyst SDK response format if needed
+            flattened = []
+            for row in rows:
+                flat_row = {}
+                for table_name, table_data in row.items():
+                    if isinstance(table_data, dict):
+                        for k, v in table_data.items():
+                            flat_row[f"{table_name}.{k}"] = v
+                    else:
+                        flat_row[table_name] = table_data
+                flattened.append(flat_row)
+                
+            return flattened
+        except Exception as e:
+            logger.error(f"Query execution failed: {e}")
+            raise Exception(f"Database execution failed: {e}")
+
+    def _analyze_results(self, user_query: str, query: str, rows: list[dict]) -> dict:
+        """AI Result Analyzer & Summarizer"""
+        system_prompt = f"""You are a Crime Analytics AI Assistant.
+You have been provided with the user's original question, the ZCQL query executed, and the raw JSON results from the database.
+
+Your task is to analyze the results and provide a comprehensive Final Response in JSON format matching this schema:
+{{
+    "summary": "Natural language summary of the findings.",
+    "insights": ["Insight 1", "Insight 2"],
+    "statistics": {{"Metric Name": "Value"}},
+    "zcql": "The executed query",
+    "data": [{{ ... the raw rows ... }}]
+}}
+
+Raw JSON Results (first 20 rows):
+{json.dumps(rows[:20], default=str, indent=2)}
+
+Original ZCQL Query:
+{query}
+
+Make sure to format your output ONLY as a valid JSON object without any markdown wrappers.
+"""
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_query}
+        ]
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.2,
+                top_p=0.7,
+                max_tokens=1024,
+                stream=False
+            )
+            raw_response = response.choices[0].message.content.strip()
+            
+            if "```json" in raw_response:
+                raw_response = raw_response.split("```json")[-1].split("```")[0].strip()
+            elif "```" in raw_response:
+                raw_response = raw_response.split("```")[-1].split("```")[0].strip()
+                
+            analyzed = json.loads(raw_response)
+            # Ensure ZCQL and data are preserved
+            analyzed["zcql"] = query
+            analyzed["data"] = rows
+            return analyzed
+        except Exception as e:
+            logger.error(f"AI Result Analysis failed: {e}")
+            # Fallback response
+            return {
+                "summary": "Retrieved data successfully but failed to generate AI summary.",
+                "insights": [],
+                "statistics": {"Total Rows": len(rows)},
+                "zcql": query,
+                "data": rows
+            }
+
+    def run_pipeline(self, user_query: str) -> dict:
+        """Runs the full AI analytics pipeline"""
+        try:
+            # 1. Schema Provider
+            schema = self._get_schema()
+            
+            # 2. AI Query Generator
+            raw_query = self._generate_query(user_query, schema)
+            
+            # 3. Query Validation Layer
+            validated_query = self._validate_query(raw_query)
+            
+            # 4. Execute Query
+            rows = self._execute_query(validated_query)
+            
+            # 5. AI Result Analyzer & Summarizer
+            final_response = self._analyze_results(user_query, validated_query, rows)
+            
+            return final_response
+            
+        except Exception as e:
+            logger.error(f"Pipeline error: {e}")
+            return {
+                "summary": f"An error occurred while processing your request: {str(e)}",
+                "insights": [],
+                "statistics": {},
+                "zcql": None,
+                "data": []
+            }
+
+# Singleton instance
+nl2sql_pipeline = NL2SQLService()

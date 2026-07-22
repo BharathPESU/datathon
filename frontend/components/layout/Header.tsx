@@ -20,14 +20,14 @@ export default function Header() {
   };
 
   return (
-    <header className="h-[var(--header-height)] bg-[var(--surface-dim)] border-b border-[var(--border)] px-6 flex items-center justify-between shrink-0">
+    <header className="h-[var(--header-height)] bg-[var(--surface)] border-b border-[var(--border)] px-6 flex items-center justify-between shrink-0">
       {/* Search Bar Placeholder */}
       <div className="relative w-64">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--foreground-dim)]" />
         <input 
           type="text" 
           placeholder="Global case search..." 
-          className="input pl-9 py-1.5 text-xs" 
+          className="input pl-9 py-1.5 text-xs bg-[var(--background)]" 
           disabled
         />
       </div>
@@ -37,14 +37,14 @@ export default function Header() {
         {/* Welcome message */}
         <div className="text-right hidden sm:block">
           <p className="text-xs text-[var(--foreground-dim)] font-medium">{getGreeting()},</p>
-          <p className="text-sm font-semibold capitalize">{user?.username.replace("_", " ")}</p>
+          <p className="text-sm font-semibold capitalize text-[var(--foreground)]">{user?.username.replace("_", " ")}</p>
         </div>
 
         {/* Vertical divider */}
         <div className="w-[1px] h-6 bg-[var(--border)] hidden sm:block" />
 
         {/* User Icon */}
-        <div className="w-8 h-8 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] flex items-center justify-center">
           <User className="w-4 h-4 text-[var(--foreground-muted)]" />
         </div>
 

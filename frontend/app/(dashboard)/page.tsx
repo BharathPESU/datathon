@@ -20,26 +20,26 @@ function KPICard({ title, value, icon: Icon, change, changeType, color, delay }:
   }, [delay]);
 
   return (
-    <div className={`glass-card p-6 transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold text-[var(--foreground-dim)] uppercase tracking-wider">{title}</p>
-          <p className="text-3xl font-extrabold mt-2" style={{ color }}>{typeof value === "number" ? value.toLocaleString() : value}</p>
-          {change && (
-            <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${
-              changeType === "up" ? "text-[var(--success)]" :
-              changeType === "down" ? "text-[var(--danger)]" :
-              "text-[var(--foreground-dim)]"
-            }`}>
-              {changeType === "up" ? <TrendingUp className="w-3.5 h-3.5" /> : changeType === "down" ? <TrendingDown className="w-3.5 h-3.5" /> : null}
-              <span>{change}</span>
-            </div>
-          )}
-        </div>
-        <div className="p-3 rounded-xl" style={{ background: `${color}15` }}>
-          <Icon className="w-5 h-5" style={{ color }} />
+    <div className={`glass-card transition-all duration-500 flex flex-col gap-4 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+      <div className="flex items-center justify-between">
+        <div className="p-2.5 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}1A`, color }}>
+          <Icon className="w-5 h-5" />
         </div>
       </div>
+      <div>
+        <p className="text-3xl font-bold text-[var(--foreground)]">{typeof value === "number" ? value.toLocaleString() : value}</p>
+        <p className="text-sm text-[var(--foreground-muted)] mt-1">{title}</p>
+      </div>
+      {change && (
+        <div className={`flex items-center gap-1 text-xs font-medium ${
+          changeType === "up" ? "text-[var(--success)]" :
+          changeType === "down" ? "text-[var(--danger)]" :
+          "text-[var(--foreground-dim)]"
+        }`}>
+          {changeType === "up" ? "↗" : changeType === "down" ? "↘" : ""}
+          <span>{change}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -87,15 +87,15 @@ export default function Dashboard() {
     );
   }
 
-  const PIE_COLORS = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#EC4899"];
+  const PIE_COLORS = ["#14B8A6", "#D97706", "#DC2626", "#7C3AED", "#2563EB", "#6B7280"];
 
   return (
     <div className="space-y-6">
       
       {/* Welcome Title */}
       <div>
-        <h2 className="text-xl font-bold gradient-text">Command & Intelligence Dashboard</h2>
-        <p className="text-xs text-[var(--foreground-dim)]">Real-time surveillance analytics, predicted trends, and operational parameters</p>
+        <h2 className="text-2xl font-semibold text-[var(--foreground)]">Command & Intelligence Dashboard</h2>
+        <p className="text-sm text-[var(--foreground-muted)] mt-1">Real-time surveillance analytics, predicted trends, and operational parameters</p>
       </div>
 
       {/* KPI Cards */}
@@ -152,8 +152,8 @@ export default function Dashboard() {
               <AreaChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="var(--brand-teal)" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="var(--brand-teal)" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
@@ -163,7 +163,7 @@ export default function Dashboard() {
                   contentStyle={{ background: "var(--surface)", borderColor: "var(--border)", color: "var(--foreground)" }} 
                   itemStyle={{ color: "var(--primary)" }}
                 />
-                <Area type="monotone" dataKey="count" stroke="var(--primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" name="FIRs" />
+                <Area type="monotone" dataKey="count" stroke="var(--brand-teal)" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" name="FIRs" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -220,7 +220,7 @@ export default function Dashboard() {
             <tbody>
               {hotspots.map((pt: any, idx: number) => (
                 <tr key={idx}>
-                  <td className="font-semibold text-white">{pt.district}</td>
+                  <td className="font-semibold text-[var(--foreground)]">{pt.district}</td>
                   <td>{pt.latitude.toFixed(4)}</td>
                   <td>{pt.longitude.toFixed(4)}</td>
                   <td>{pt.count} cases</td>

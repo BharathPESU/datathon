@@ -19,6 +19,8 @@ import {
   GitPullRequest,
   HelpCircle,
   Edit,
+  Mic,
+  Square,
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -72,6 +74,9 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
   const [mode, setMode] = useState<QueryMode>("database");
   const [selectedCase, setSelectedCase] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -278,6 +283,58 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const file = new File([audioBlob], "recording.webm", { type: "audio/webm" });
+        setLoading(true);
+        try {
+          const result = await api.chat.transcribe(file);
+          if (result.status === "success" && result.text) {
+            setInput(prev => (prev ? prev + " " + result.text : result.text));
+          }
+        } catch (err) {
+          console.error("Transcription failed", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
     }
   };
 
@@ -531,7 +588,7 @@ export default function ChatPage() {
                 onClick={() => handleModeChange("database")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all ${
                   mode === "database"
-                    ? "bg-[var(--primary)] text-white"
+                    ? "bg-[var(--primary)] text-[var(--foreground)]"
                     : "text-[var(--foreground-dim)] hover:bg-[var(--border)]"
                 }`}
               >
@@ -543,7 +600,7 @@ export default function ChatPage() {
                 onClick={() => handleModeChange("knowledge_base")}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-all border-l border-[var(--border)] ${
                   mode === "knowledge_base"
-                    ? "bg-[var(--accent)] text-white"
+                    ? "bg-[var(--accent)] text-[var(--foreground)]"
                     : "text-[var(--foreground-dim)] hover:bg-[var(--border)]"
                 }`}
               >
@@ -607,7 +664,7 @@ export default function ChatPage() {
                 )}
               </div>
               <div>
-                <h4 className="font-bold text-white">
+                <h4 className="font-bold text-[var(--foreground)]">
                   {mode === "database"
                     ? "Query the Crime Database"
                     : "Ask the Knowledge Base"}
@@ -697,7 +754,7 @@ export default function ChatPage() {
                             {m.mode === "database" && r.case_master_id && (
                               <button
                                 onClick={() => handleAddCaseToBoard(r.case_master_id)}
-                                className="ml-1 px-1 rounded bg-[var(--primary)] text-white text-[8px] font-bold transition-all shrink-0"
+                                className="ml-1 px-1 rounded bg-[var(--primary)] text-[var(--foreground)] text-[8px] font-bold transition-all shrink-0"
                                 title="Add case node to whiteboard canvas"
                               >
                                 + Board
@@ -753,12 +810,24 @@ export default function ChatPage() {
               disabled={loading}
             />
             <button
+              type="button"
+              onClick={handleToggleRecording}
+              className={`flex items-center justify-center p-3 shrink-0 transition-all rounded-xl border ${
+                isRecording
+                  ? "bg-red-500/20 text-red-500 border-red-500/50 hover:bg-red-500/30 animate-pulse"
+                  : "bg-[var(--surface-elevated)] text-[var(--foreground-muted)] border-[var(--border)] hover:text-white"
+              }`}
+              title={isRecording ? "Stop Recording" : "Start Recording (Kannada/English)"}
+            >
+              {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
+            </button>
+            <button
               id="chat-send"
               type="submit"
               className={`btn-primary flex items-center justify-center p-3 shrink-0 transition-all ${
                 mode === "knowledge_base" ? "bg-[var(--accent)] hover:opacity-90" : ""
               }`}
-              disabled={loading || !input.trim()}
+              disabled={loading || (!input.trim() && !isRecording)}
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -778,7 +847,7 @@ export default function ChatPage() {
           <div className="p-4 border-b border-[var(--border)] bg-[var(--surface-dim)]/50 space-y-3 shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
+                <h3 className="text-sm font-bold flex items-center gap-1.5 text-[var(--foreground)]">
                   <GitPullRequest className="w-4 h-4 text-[var(--primary)]" />
                   Investigation Canvas & Criminal Filter
                 </h3>
@@ -901,14 +970,14 @@ export default function ChatPage() {
                       className="flex items-center gap-2 p-1.5 pr-2 bg-[var(--surface-dim)] hover:bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg shrink-0 transition-all"
                     >
                       <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-white leading-tight truncate max-w-[100px]">{c.accused_name}</p>
+                        <p className="text-[10px] font-bold text-[var(--foreground)] leading-tight truncate max-w-[100px]">{c.accused_name}</p>
                         <p className="text-[8px] text-[var(--foreground-dim)] leading-none mt-0.5 truncate max-w-[100px]">
                           {c.police_station} | {c.crime_head}
                         </p>
                       </div>
                       <button
                         onClick={() => handleAddCriminalToBoard(c)}
-                        className="py-0.5 px-1.5 rounded bg-[var(--primary)] hover:opacity-90 text-[8px] font-bold text-white shrink-0"
+                        className="py-0.5 px-1.5 rounded bg-[var(--primary)] hover:opacity-90 text-[8px] font-bold text-[var(--foreground)] shrink-0"
                       >
                         + Board
                       </button>
@@ -1011,7 +1080,7 @@ export default function ChatPage() {
                     {node.type}
                   </span>
 
-                  <h4 className="text-[11px] font-bold text-white truncate max-w-[130px]" title={node.label}>
+                  <h4 className="text-[11px] font-bold text-[var(--foreground)] truncate max-w-[130px]" title={node.label}>
                     {node.label}
                   </h4>
 
@@ -1114,7 +1183,7 @@ export default function ChatPage() {
                 </span>
               ) : (
                 <>
-                  <p className="text-xs text-white font-bold">Upload Document</p>
+                  <p className="text-xs text-[var(--foreground)] font-bold">Upload Document</p>
                   <p className="text-[9px] text-[var(--foreground-dim)] mt-1">
                     PDF, TXT, MD, CSV, JSON (max 5MB)
                   </p>
@@ -1147,7 +1216,7 @@ export default function ChatPage() {
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <FileText className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-semibold text-white truncate" title={doc.filename}>
+                          <p className="text-[11px] font-semibold text-[var(--foreground)] truncate" title={doc.filename}>
                             {doc.filename}
                           </p>
                           <p className="text-[9px] text-[var(--foreground-dim)]">
@@ -1173,7 +1242,7 @@ export default function ChatPage() {
               <div className="border-t border-[var(--border)] pt-4 mt-4 space-y-4 animate-slide-in">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-bold text-white truncate">{selectedCase.crime_no}</h4>
+                    <h4 className="text-xs font-bold text-[var(--foreground)] truncate">{selectedCase.crime_no}</h4>
                     <p className="text-[9px] text-[var(--foreground-dim)] uppercase font-semibold">
                       Cited Record
                     </p>
@@ -1190,7 +1259,7 @@ export default function ChatPage() {
                     <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[8px] mb-0.5">
                       Station & Date
                     </span>
-                    <p className="text-[11px] text-white font-medium">
+                    <p className="text-[11px] text-[var(--foreground)] font-medium">
                       {selectedCase.police_station} ({selectedCase.crime_registered_date})
                     </p>
                   </div>
@@ -1232,13 +1301,13 @@ export default function ChatPage() {
               <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px] mb-1">
                 Police Station
               </span>
-              <p className="text-white font-semibold">{selectedCase.police_station}</p>
+              <p className="text-[var(--foreground)] font-semibold">{selectedCase.police_station}</p>
             </div>
             <div>
               <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px] mb-1">
                 Registered Date
               </span>
-              <p className="text-white font-semibold">
+              <p className="text-[var(--foreground)] font-semibold">
                 {selectedCase.crime_registered_date}
               </p>
             </div>
@@ -1246,7 +1315,7 @@ export default function ChatPage() {
               <span className="block font-bold text-[var(--foreground-dim)] uppercase text-[9px] mb-1">
                 Case Category
               </span>
-              <p className="text-white font-semibold">
+              <p className="text-[var(--foreground)] font-semibold">
                 {selectedCase.category_name} ({selectedCase.gravity})
               </p>
             </div>
@@ -1266,7 +1335,7 @@ export default function ChatPage() {
       {showCustomNodeModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-sm chart-container border border-[var(--border)] bg-[var(--surface-elevated)] p-6 space-y-4 animate-slide-in">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <h3 className="text-sm font-bold text-[var(--foreground)] flex items-center gap-2">
               <Plus className="w-4 h-4 text-[var(--primary)]" />
               Add Custom Note
             </h3>

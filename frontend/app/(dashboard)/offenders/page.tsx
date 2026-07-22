@@ -40,8 +40,8 @@ export default function OffendersPage() {
       {/* Title */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold gradient-text">Repeat Offender Recidivism Profiling</h2>
-          <p className="text-xs text-[var(--foreground-dim)]">Identifies persistent offenders, ranks recidivism risks, and analyzes offence timelines</p>
+          <h2 className="text-2xl font-semibold text-[var(--foreground)]">Repeat Offender Recidivism Profiling</h2>
+          <p className="text-sm text-[var(--foreground-muted)] mt-1">Identifies persistent offenders, ranks recidivism risks, and analyzes offence timelines</p>
         </div>
 
         {/* Filter */}

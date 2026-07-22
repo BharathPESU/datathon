@@ -148,15 +148,15 @@ export default function AdminPage() {
       
       {/* Title */}
       <div>
-        <h2 className="text-xl font-bold gradient-text">Surveillance Administration Control</h2>
-        <p className="text-xs text-[var(--foreground-dim)]">Compliance audits, table stats, and identity provisioning controls</p>
+        <h2 className="text-2xl font-semibold text-[var(--foreground)]">Surveillance Administration Control</h2>
+        <p className="text-sm text-[var(--foreground-muted)] mt-1">Manage users, clear caching, and inspect audit logs</p>
       </div>
 
       {/* Cloud Migration Action Bar */}
       <div className="glass-card p-5 border-l-4 border-l-[var(--primary)] flex flex-col gap-4 bg-[var(--surface-dim)]/40">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="space-y-1">
-            <h3 className="text-sm font-bold flex items-center gap-2 text-white">
+            <h3 className="text-sm font-bold flex items-center gap-2 text-[var(--foreground)]">
               <Database className="w-4.5 h-4.5 text-[var(--primary)]" />
               <span>Zoho Catalyst Cloud Data Store Migration</span>
             </h3>
@@ -272,7 +272,7 @@ export default function AdminPage() {
           <div className="flex-1 overflow-y-auto space-y-2.5 max-h-[300px] pr-1 text-xs">
             {stats && Object.entries(stats.tables).map(([tbl, cnt]: any) => (
               <div key={tbl} className="flex items-center justify-between p-3 bg-[var(--surface-dim)]/50 border border-[var(--border)] rounded-lg">
-                <span className="font-semibold text-white">{tbl}</span>
+                <span className="font-semibold text-[var(--foreground)]">{tbl}</span>
                 <span className="badge badge-primary text-[10px]">{cnt} rows</span>
               </div>
             ))}
@@ -280,7 +280,7 @@ export default function AdminPage() {
 
           <div className="border-t border-[var(--border)] pt-4 mt-4 flex justify-between items-center text-xs">
             <span className="text-[var(--foreground-dim)] font-medium">Total Database Sandbox Footprint:</span>
-            <span className="font-bold text-white text-sm">{stats?.total_records || 0} records</span>
+            <span className="font-bold text-[var(--foreground)] text-sm">{stats?.total_records || 0} records</span>
           </div>
         </div>
 
@@ -317,7 +317,7 @@ export default function AdminPage() {
               <tbody>
                 {pendingUsers.map((u: any) => (
                   <tr key={u.user_id}>
-                    <td className="font-semibold text-white">{u.username}</td>
+                    <td className="font-semibold text-[var(--foreground)]">{u.username}</td>
                     <td>
                       <span className="badge badge-secondary uppercase text-[9px]">{u.role}</span>
                     </td>
@@ -330,7 +330,7 @@ export default function AdminPage() {
                     <td className="text-right space-x-2">
                       <button
                         onClick={() => handleApproveUser(u.user_id)}
-                        className="btn-primary py-1 px-3 text-[10px] font-bold inline-flex items-center gap-1 bg-gradient-to-tr from-[var(--success)] to-green-600 border-none text-white hover:opacity-90 transition-all shadow-sm"
+                        className="btn-primary py-1 px-3 text-[10px] font-bold inline-flex items-center gap-1 bg-gradient-to-tr from-[var(--success)] to-green-600 border-none text-[var(--foreground)] hover:opacity-90 transition-all shadow-sm"
                       >
                         <Check className="w-3 h-3" /> Approve
                       </button>
@@ -372,7 +372,7 @@ export default function AdminPage() {
             <tbody>
               {logs.map((l: any) => (
                 <tr key={l.ROWID}>
-                  <td className="font-semibold text-white">
+                  <td className="font-semibold text-[var(--foreground)]">
                     <span className={`badge ${
                       l.action === "LOGIN" ? "badge-success" : "badge-info"
                     }`}>{l.action}</span>

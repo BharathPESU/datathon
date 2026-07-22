@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Karnataka Police Crime Analytics",
-  description: "Conversational crime intelligence, risk assessment, and co-accused network analysis.",
+  title: "MosaicMove - AI Surveillance Analytics",
+  description: "Next-gen intelligent predictive analytics platform.",
 };
 
 export default function RootLayout({
