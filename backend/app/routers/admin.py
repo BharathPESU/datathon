@@ -3,6 +3,7 @@ from app.models.user import AuditLogOut, UserOut, UserCreate
 from app.core.security import get_current_user, hash_password
 from app.core.permissions import can_access
 from app.db import catalyst_db as db
+from app.db import user_roles
 from app.services.cloud_seeder import run_cloud_migration
 
 router = APIRouter()
@@ -93,82 +94,67 @@ ROLE_IDS = {
 }
 
 
+@router.get("/users")
+async def list_users(current_user: dict = Depends(get_current_user)):
+    """List all user roles & pre-approved emails (Admin only)."""
+    if current_user["role"].lower() != "admin":
+        raise HTTPException(status_code=403, detail="Permission denied")
+    users = user_roles.list_all_user_roles()
+    return {"users": users}
+
+@router.post("/users")
+async def add_user_by_admin(req: dict, current_user: dict = Depends(get_current_user)):
+    """Add a user email directly with assigned role (Admin only). User can then log in via Google."""
+    if current_user["role"].lower() != "admin":
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    email = req.get("email")
+    role = req.get("role", "investigator")
+    employee_id = req.get("employee_id")
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+        
+    row = user_roles.add_approved_user(email=email, role=role, employee_id=employee_id)
+    return {"status": "success", "message": f"User {email} added with role {role}. They can now sign in with Google.", "user": row}
+
 @router.get("/pending-users")
 async def list_pending_users(current_user: dict = Depends(get_current_user)):
-    """List pending registration approval requests (Admin only)."""
+    """List pending role request approvals (Admin only)."""
     if current_user["role"].lower() != "admin":
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    users = db.get_all_rows("AppUser")
-    pending = []
-    for u in users:
-        is_active = u.get("is_active")
-        # Check if is_active is False
-        if is_active is False or str(is_active).lower() == "false":
-            pending.append(
-                UserOut(
-                    user_id=u["ROWID"],
-                    username=u["username"],
-                    role=u["role"],
-                    employee_id=u.get("employee_id"),
-                    is_active=False
-                )
-            )
+    pending = user_roles.list_pending_role_requests()
     return {"users": pending}
 
-
-@router.post("/users/{user_id}/approve")
-async def approve_user(user_id: int, current_user: dict = Depends(get_current_user)):
-    """Approve a pending user registration request, activating it and registering in Catalyst (Admin only)."""
+@router.post("/users/approve")
+async def approve_user_email(req: dict, current_user: dict = Depends(get_current_user)):
+    """Approve a pending role request (Admin only)."""
     if current_user["role"].lower() != "admin":
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    user_row = db.get_row("AppUser", user_id)
-    if not user_row:
-        raise HTTPException(status_code=404, detail="User not found")
+    email = req.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
 
-    user_row["is_active"] = True
-    db.update_row("AppUser", user_id, user_row)
+    row = user_roles.approve_user_request(email)
+    if not row:
+        raise HTTPException(status_code=404, detail="Request not found")
 
-    role_key = str(user_row.get("role", "investigator")).lower()
-    role_id = ROLE_IDS.get(role_key, ROLE_IDS["investigator"])
+    return {"status": "success", "message": f"Access request for {email} approved. User can now sign in with Google."}
 
-    app = db.get_db_app()
-    if app:
-        try:
-            signup_config = {
-                "platform_type": "web",
-                "redirect_url": "http://localhost:3000/login",
-                "template_details": {
-                    "senders_mail": "verified_email@yourdomain.com", # Update with verified sender email
-                    "subject": "Account Approved - KSP Crime Analytics",
-                    "message": "<p>Hello,</p><p>Your request has been approved! You can now log in: <a href='%LINK%'>Login</a></p>"
-                }
-            }
-            user_details = {
-                "first_name": user_row["username"].split("@")[0],
-                "email_id": user_row["username"],
-                "role_id": role_id
-            }
-            app.authentication().register_user(signup_config, user_details)
-        except Exception as e:
-            logger.error(f"Catalyst signup invitation failed: {e}")
-
-    return {"status": "success", "message": f"User {user_row['username']} approved and activated."}
-
-
-@router.post("/users/{user_id}/reject")
-async def reject_user(user_id: int, current_user: dict = Depends(get_current_user)):
-    """Reject a pending registration request (Admin only)."""
+@router.post("/users/reject")
+async def reject_user_email(req: dict, current_user: dict = Depends(get_current_user)):
+    """Reject a pending role request (Admin only)."""
     if current_user["role"].lower() != "admin":
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    user_row = db.get_row("AppUser", user_id)
-    if not user_row:
-        raise HTTPException(status_code=404, detail="User not found")
+    email = req.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
 
-    db.delete_row("AppUser", user_id)
-    return {"status": "success", "message": f"Registration request for {user_row['username']} rejected."}
+    row = user_roles.reject_user_request(email)
+    return {"status": "success", "message": f"Access request for {email} rejected."}
 
 
 @router.post("/seed-cloud")

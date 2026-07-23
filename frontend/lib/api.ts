@@ -109,9 +109,13 @@ const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-    signup: (data: any) => fetchApi<any>("/auth/signup", {
+    requestRole: (data: { email: string; role: string; employee_id?: number }) => fetchApi<any>("/auth/request-role", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+    googleVerify: (email: string) => fetchApi<any>("/auth/google-verify", {
+      method: "POST",
+      body: JSON.stringify({ email }),
     }),
     me: () => fetchApi<any>("/auth/me"),
     getCustomToken: (email: string) => fetchApi<any>(`/auth/custom-token?email=${encodeURIComponent(email)}`),
@@ -280,11 +284,13 @@ const api = {
       method: "POST"
     }),
     listPendingUsers: () => fetchApi<any>("/admin/pending-users"),
-    approveUser: (userId: number) => fetchApi<any>(`/admin/users/${userId}/approve`, {
-      method: "POST"
+    approveUser: (email: string) => fetchApi<any>("/admin/users/approve", {
+      method: "POST",
+      body: JSON.stringify({ email })
     }),
-    rejectUser: (userId: number) => fetchApi<any>(`/admin/users/${userId}/reject`, {
-      method: "POST"
+    rejectUser: (email: string) => fetchApi<any>("/admin/users/reject", {
+      method: "POST",
+      body: JSON.stringify({ email })
     }),
   },
 };
