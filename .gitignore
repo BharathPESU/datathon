@@ -3,11 +3,12 @@
 backend.log
 frontend.log
 
-# Secrets
+# Secrets & Shell scripts
 *.json
 !catalyst.json
 !catalyst_datastore_schema.json
 client_secret_*.json
+start.sh
 
 # Assets
 ksp.jpeg
@@ -21,3 +22,9 @@ __pycache__/
 node_modules/
 .next/
 .env
+
+# Agent artifacts
+.agents/
+ask_llm.py
+ask.sh
+*.dist-info/

@@ -258,9 +258,10 @@ const api = {
     deleteDocument: (session_uuid: string, fileId: string) => fetchApi<any>(`/chat/session/${session_uuid}/documents/${fileId}`, {
       method: "DELETE",
     }),
-    transcribe: (file: File) => {
+    transcribe: (file: File, language: string = "en") => {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("language", language);
       return fetchApi<any>("/chat/transcribe", {
         method: "POST",
         body: fd,

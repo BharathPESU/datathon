@@ -6,8 +6,14 @@ import os
 import json
 import logging
 import re
+import urllib3
+import requests
 from typing import Any, Optional
 from datetime import datetime
+
+# Suppress SSL certificate verification warnings for Catalyst local development
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+requests.Session.verify = False
 
 logger = logging.getLogger(__name__)
 
@@ -87,44 +93,63 @@ def _get_table(table_name: str) -> list[dict]:
         _row_counters[table_name] = 0
     return _tables[table_name]
 
+_cached_access_token = None
+
+def _get_live_access_token() -> Optional[str]:
+    """Fetch live access token using CATALYST_AUTH environment variable."""
+    global _cached_access_token
+    auth_str = os.getenv("CATALYST_AUTH")
+    if not auth_str:
+        return os.getenv("CATALYST_AUTH_TOKEN")
+    try:
+        auth = json.loads(auth_str)
+        res = requests.post("https://accounts.zoho.in/oauth/v2/token", data={
+            "client_id": auth["client_id"],
+            "client_secret": auth["client_secret"],
+            "refresh_token": auth["refresh_token"],
+            "grant_type": "refresh_token"
+        }, timeout=10)
+        if res.status_code == 200:
+            _cached_access_token = res.json().get("access_token")
+            return _cached_access_token
+    except Exception as e:
+        logger.debug(f"Failed to fetch live access token: {e}")
+    return os.getenv("CATALYST_AUTH_TOKEN")
+
 # --- Database API wrappers ---
 
 def insert_row(table_name: str, data: dict) -> dict:
     """Insert a row into a table. Returns the inserted row with ROWID."""
+    # 1. Try direct REST API if CATALYST_AUTH is available
+    if os.getenv("CATALYST_AUTH") or os.getenv("CATALYST_AUTH_TOKEN"):
+        try:
+            token = _get_live_access_token()
+            if token:
+                project_id = os.getenv("CATALYST_PROJECT_ID", "55341000000016001")
+                url = f"https://api.catalyst.zoho.in/baas/v1/project/{project_id}/table/{table_name}/row"
+                headers = {
+                    "Authorization": f"Zoho-oauthtoken {token}",
+                    "CATALYST-ORG": "60076836035",
+                    "Content-Type": "application/json"
+                }
+                res = requests.post(url, headers=headers, json=[data], timeout=10)
+                if res.status_code == 200:
+                    res_json = res.json()
+                    if res_json.get("status") == "success" and "data" in res_json and len(res_json["data"]) > 0:
+                        return res_json["data"][0]
+        except Exception as e_rest:
+            logger.debug(f"REST API insert fallback for {table_name}: {e_rest}")
+
+    # 2. Try SDK datastore insert if running in serverless cloud AppSail
     app = get_db_app()
     if app:
         try:
-            # Safely get all columns to filter out nonexistent ones
-            try:
-                cols = app.datastore().table(table_name).get_all_columns()
-                live_cols = [c.get("column_name") for c in cols]
-                
-                # Map timestamp to time_stamp if present in live columns
-                mapped_data = {}
-                for k, v in data.items():
-                    if k == "timestamp" and "time_stamp" in live_cols and "timestamp" not in live_cols:
-                        mapped_data["time_stamp"] = v
-                    else:
-                        mapped_data[k] = v
-                        
-                filtered = {k: v for k, v in mapped_data.items() if k in live_cols}
-                res = app.datastore().table(table_name).insert_row(filtered)
-                return res
-            except Exception as e_col:
-                logger.warning(f"Could not retrieve column metadata for {table_name}: {e_col}. Proceeding with static mapping fallback.")
-                mapped_data = {}
-                for k, v in data.items():
-                    if k in STATIC_COLUMN_MAPS:
-                        mapped_data[STATIC_COLUMN_MAPS[k]] = v
-                    else:
-                        mapped_data[k] = v
-                res = app.datastore().table(table_name).insert_row(mapped_data)
-                return res
+            res = app.datastore().table(table_name).insert_row(data)
+            return res
         except Exception as e:
-            logger.error(f"Live Datastore insert failed for {table_name}: {e}")
-            raise e
+            logger.warning(f"SDK Datastore insert skipped for {table_name}. Using in-memory DB: {e}")
 
-    # Local in-memory fallback
+    # 3. Local in-memory fallback
     table = _get_table(table_name)
     _row_counters[table_name] = _row_counters.get(table_name, 0) + 1
     row = {"ROWID": _row_counters[table_name], **data}

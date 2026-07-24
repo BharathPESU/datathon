@@ -57,9 +57,7 @@ def chunk_text(text: str, chunk_size: int = 800) -> list[str]:
     if not cleaned:
         return []
 
-    paragraphs = [p.strip() for p in re.split(r"
-\s*
-", cleaned) if p.strip()]
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", cleaned) if p.strip()]
     chunks: list[str] = []
     current = ""
 
@@ -72,9 +70,7 @@ def chunk_text(text: str, chunk_size: int = 800) -> list[str]:
             continue
 
         if len(current) + len(paragraph) + 2 <= chunk_size:
-            current = f"{current}
-
-{paragraph}".strip()
+            current = f"{current}\n\n{paragraph}".strip()
         else:
             if current:
                 chunks.append(current)

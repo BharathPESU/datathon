@@ -547,7 +547,7 @@ class QuickMLService:
 
 
     @staticmethod
-    def transcribe_audio(audio_bytes: bytes, filename: str, request=None) -> str:
+    def transcribe_audio(audio_bytes: bytes, filename: str, request=None, language: str = "en") -> str:
         """
         Transcribes audio using Zoho Zia Audio Transcribe API.
         """
@@ -579,17 +579,16 @@ class QuickMLService:
             "Authorization": f"Zoho-oauthtoken {token}"
         }
 
-        # Send multipart/form-data
+        # Send multipart/form-data with language parameter
         files = {"file": (filename, audio_bytes, "audio/wav")}
+        data_param = {"language": language or "en"}
         
         try:
             with httpx.Client(timeout=60.0) as client:
-                resp = client.post(url, headers=headers, files=files)
+                resp = client.post(url, headers=headers, files=files, data=data_param)
                 resp.raise_for_status()
                 data = resp.json()
-                # The response structure from Zia transcribe usually contains 'text' or similar. 
-                # Let's extract the text. If we don't know the exact structure, we'll return the whole data or handle common fields.
-                # Common fields: 'text', 'transcription', 'data', etc.
+                logger.info(f"Zia Transcribe success: {data}")
                 return data.get("text", data.get("transcription", json.dumps(data)))
         except Exception as e:
             logger.error(f"Zia audio transcribe failed: {e}")

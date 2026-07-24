@@ -254,9 +254,10 @@ async def delete_session_document(
 async def transcribe_audio(
     request: Request,
     file: UploadFile = File(...),
+    language: str = "en",
     current_user: dict = Depends(get_current_user)
 ):
-    """Transcribe audio file via QuickML."""
+    """Transcribe audio file via QuickML Zia Speech-to-Text."""
     if not can_access(current_user["role"], "chat:use"):
         raise HTTPException(status_code=403, detail="Permission denied")
 
@@ -265,7 +266,7 @@ async def transcribe_audio(
         raise HTTPException(status_code=400, detail="Empty audio file upload")
 
     try:
-        text = QuickMLService.transcribe_audio(content, file.filename, request=request)
+        text = QuickMLService.transcribe_audio(content, file.filename, request=request, language=language)
         return {"status": "success", "text": text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
